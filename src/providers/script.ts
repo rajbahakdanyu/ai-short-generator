@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import type {RemoteConfig} from './config.ts';
-import {geminiParts, request} from './http.ts';
+import {geminiParts, readProviderJson, request} from './http.ts';
 
 const blocks = z.array(z.object({text: z.string().optional()}));
 
@@ -15,7 +15,7 @@ export async function generateScript(config: RemoteConfig, system: string, topic
     });
     return z
       .object({content: blocks})
-      .parse(await response.json())
+      .parse(await readProviderJson(response, 1024 * 1024))
       .content.map(({text}) => text)
       .join('');
   }
@@ -38,7 +38,7 @@ export async function generateScript(config: RemoteConfig, system: string, topic
     });
     const schema = z.object({output: z.object({message: z.object({content: blocks})})});
     return schema
-      .parse(await response.json())
+      .parse(await readProviderJson(response, 1024 * 1024))
       .output.message.content.map(({text}) => text)
       .join('');
   }
@@ -53,12 +53,12 @@ export async function generateScript(config: RemoteConfig, system: string, topic
   if (provider === 'cohere') {
     const schema = z.object({message: z.object({content: blocks})});
     return schema
-      .parse(await response.json())
+      .parse(await readProviderJson(response, 1024 * 1024))
       .message.content.map(({text}) => text)
       .join('');
   }
   const schema = z.object({
     choices: z.array(z.object({message: z.object({content: z.string().nullable()})})),
   });
-  return schema.parse(await response.json()).choices[0]?.message.content ?? '';
+  return schema.parse(await readProviderJson(response, 1024 * 1024)).choices[0]?.message.content ?? '';
 }

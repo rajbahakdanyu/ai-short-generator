@@ -1,8 +1,10 @@
 import {
   Button,
+  Checkbox,
   FileInput,
   Group,
   Modal,
+  NumberInput,
   PasswordInput,
   Select,
   Stack,
@@ -20,7 +22,21 @@ import {
   voiceProviders,
 } from '../src/providers/catalog.ts';
 
-export type PaidInput = {topic: string; mode: 'plan' | 'prepare' | 'export'; selection: PaidSelection};
+import type {Draft} from './model.ts';
+
+export type PaidInput = {
+  topic: string;
+  mode: 'plan' | 'prepare' | 'export';
+  selection: PaidSelection;
+  video?: boolean;
+  videoKey?: string;
+  board?: {
+    title: string;
+    scenes: Pick<Draft['scenes'][number], 'name' | 'narration' | 'imagePrompt' | 'sources'>[];
+  };
+  resumeLimit?: number;
+  estimate?: {script: number; visual: number; voice: number; limit: number};
+};
 
 const envValue = 'env';
 const options = (names: readonly string[]) => [
@@ -35,12 +51,18 @@ const stages = {
 
 export function PaidDialog({
   opened,
+  resume,
+  spendingLimit,
+  draft,
   close,
   submit,
   selection,
   setSelection,
 }: {
   opened: boolean;
+  resume: boolean;
+  spendingLimit?: number;
+  draft: Draft;
   close: () => void;
   submit: (input: PaidInput, track?: File) => void;
   selection: PaidSelection;
@@ -49,7 +71,39 @@ export function PaidDialog({
   const [topic, setTopic] = useState('');
   const [mode, setMode] = useState<PaidInput['mode']>('plan');
   const [soundtrack, setSoundtrack] = useState<File | null>(null);
-  const visible: (keyof PaidSelection)[] = mode === 'plan' ? ['script'] : ['script', 'image', 'voice'];
+  const [video, setVideo] = useState(false);
+  const [videoKey, setVideoKey] = useState('');
+  const [reviewed, setReviewed] = useState(false);
+  const [resumeLimit, setResumeLimit] = useState(spendingLimit);
+  const [useBudget, setUseBudget] = useState(false);
+  const [prices, setPrices] = useState({script: 0, visual: 0, voice: 0, limit: 0});
+  const hasBoard =
+    !!draft.title.trim() &&
+    draft.scenes.length <= 8 &&
+    draft.scenes.every((scene) => scene.narration.trim() && scene.imagePrompt?.trim());
+  const visible: (keyof PaidSelection)[] = resume
+    ? ['script', 'image', 'voice']
+    : mode === 'plan'
+      ? ['script']
+      : video
+        ? ['voice']
+        : ['image', 'voice'];
+  const local = selection.voice?.provider === 'kokoro';
+  const estimate =
+    mode === 'plan' ? prices.script : (prices.visual + (local ? 0 : prices.voice)) * draft.scenes.length;
+  const overBudget = useBudget && estimate > prices.limit + 1e-8;
+  const ready = resume || (!overBudget && (mode === 'plan' ? !!topic.trim() : hasBoard && reviewed));
+  function priceInput(key: keyof typeof prices, label: string) {
+    return (
+      <NumberInput
+        key={key}
+        label={label}
+        min={0}
+        value={prices[key]}
+        onChange={(value) => setPrices((current) => ({...current, [key]: Number(value) || 0}))}
+      />
+    );
+  }
   const missingEndpointKey = visible.some((stage) => {
     const choice = selection[stage];
     if (choice?.provider === 'kokoro') return false;
@@ -68,34 +122,54 @@ export function PaidDialog({
   });
 
   return (
-    <Modal opened={opened} onClose={close} title="Generate from a topic" size="lg" centered>
+    <Modal
+      opened={opened}
+      onClose={close}
+      title={resume ? 'Resume generation' : 'Generate from a topic'}
+      size="lg"
+      centered
+    >
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          if (!topic.trim() || missingEndpointKey) return;
+          if (!ready || missingEndpointKey) return;
           submit(
             {
               topic: topic.trim(),
               mode,
+              video: !resume && mode !== 'plan' && video,
+              videoKey: videoKey.trim() || undefined,
+              board:
+                !resume && mode !== 'plan'
+                  ? {
+                      title: draft.title,
+                      scenes: draft.scenes.map(({name, narration, imagePrompt, sources}) => ({
+                        name,
+                        narration,
+                        imagePrompt,
+                        sources,
+                      })),
+                    }
+                  : undefined,
+              resumeLimit: resume ? resumeLimit : undefined,
+              estimate: !resume && useBudget ? prices : undefined,
               selection: {
                 script: clean('script'),
-                image:
-                  mode === 'plan'
-                    ? undefined
-                    : {
-                        ...clean('image'),
-                        size: selection.image?.size?.trim() || undefined,
-                        aspectRatio: selection.image?.aspectRatio?.trim() || undefined,
-                        options: selection.image?.options?.trim() || undefined,
-                      },
-                voice:
-                  mode === 'plan'
-                    ? undefined
-                    : {
-                        ...clean('voice'),
-                        voice: selection.voice?.voice?.trim() || undefined,
-                        format: selection.voice?.format || undefined,
-                      },
+                image: !visible.includes('image')
+                  ? undefined
+                  : {
+                      ...clean('image'),
+                      size: selection.image?.size?.trim() || undefined,
+                      aspectRatio: selection.image?.aspectRatio?.trim() || undefined,
+                      options: selection.image?.options?.trim() || undefined,
+                    },
+                voice: !visible.includes('voice')
+                  ? undefined
+                  : {
+                      ...clean('voice'),
+                      voice: selection.voice?.voice?.trim() || undefined,
+                      format: selection.voice?.format || undefined,
+                    },
               },
             },
             mode === 'plan' ? undefined : (soundtrack ?? undefined),
@@ -103,26 +177,116 @@ export function PaidDialog({
         }}
       >
         <Stack gap="md">
-          <TextInput
-            label="Topic"
-            placeholder="Why do black holes look bright?"
-            value={topic}
-            maxLength={4000}
-            onChange={(event) => setTopic(event.currentTarget.value)}
-          />
-          <Select
-            label="What to generate"
-            value={mode}
-            allowDeselect={false}
-            data={[
-              {value: 'plan', label: 'Storyboard only'},
-              {value: 'prepare', label: 'Storyboard, images and narration'},
-              {value: 'export', label: 'Full Short with MP4 export'},
-            ]}
-            onChange={(choice) => {
-              if (choice === 'plan' || choice === 'prepare' || choice === 'export') setMode(choice);
-            }}
-          />
+          {!resume && mode === 'plan' && (
+            <TextInput
+              label="Topic"
+              placeholder="Why do black holes look bright?"
+              value={topic}
+              maxLength={4000}
+              onChange={(event) => setTopic(event.currentTarget.value)}
+            />
+          )}
+          {!resume && (
+            <Select
+              label="What to generate"
+              value={mode}
+              allowDeselect={false}
+              data={[
+                {value: 'plan', label: 'Storyboard only'},
+                {value: 'prepare', label: 'Prepare the current storyboard'},
+                {value: 'export', label: 'Generate from current storyboard and export MP4'},
+              ]}
+              onChange={(choice) => {
+                if (choice === 'plan' || choice === 'prepare' || choice === 'export') setMode(choice);
+              }}
+            />
+          )}
+          {!resume && mode !== 'plan' && (
+            <>
+              <Text size="sm">
+                {hasBoard
+                  ? `Use the ${draft.scenes.length} scenes open in Studio.`
+                  : 'Generate and open a storyboard with visual prompts before preparing scenes.'}
+              </Text>
+              <Checkbox
+                label="I reviewed the storyboard and checked its educational claims"
+                checked={reviewed}
+                onChange={(event) => setReviewed(event.currentTarget.checked)}
+              />
+              <Select
+                label="Visuals"
+                value={video ? 'video' : 'image'}
+                allowDeselect={false}
+                data={[
+                  {value: 'image', label: 'Still illustrations'},
+                  {value: 'video', label: 'Cinematic video · fal WAN 2.7'},
+                ]}
+                onChange={(value) => setVideo(value === 'video')}
+              />
+              {video && (
+                <Text size="sm">
+                  Each scene requests a five-second portrait clip. Video generation can take several minutes.
+                </Text>
+              )}
+            </>
+          )}
+          {(resume || (mode !== 'plan' && video)) && (
+            <PasswordInput
+              label="fal video API key"
+              placeholder="Use FAL_KEY from .env"
+              maxLength={1500}
+              value={videoKey}
+              onChange={(event) => setVideoKey(event.currentTarget.value)}
+            />
+          )}
+          {resume ? (
+            <Stack gap="xs">
+              {spendingLimit !== undefined && (
+                <NumberInput
+                  label="Total estimated spending limit (USD)"
+                  min={spendingLimit}
+                  value={resumeLimit}
+                  onChange={(value) => setResumeLimit(typeof value === 'number' ? value : undefined)}
+                />
+              )}
+              <Text size="sm">
+                Select the original providers and models. Studio reuses downloaded assets and completed
+                scenes.
+              </Text>
+            </Stack>
+          ) : (
+            <>
+              <Text size="sm">
+                {mode === 'plan'
+                  ? 'One script generation request.'
+                  : `${draft.scenes.length} visual requests and ${local ? 'local Kokoro narration' : `up to ${draft.scenes.length} remote voice requests`}.`}
+              </Text>
+              <Checkbox
+                label="Use my provider prices to enforce an estimated spending limit"
+                checked={useBudget}
+                onChange={(event) => setUseBudget(event.currentTarget.checked)}
+              />
+              {useBudget ? (
+                <>
+                  {mode === 'plan' ? (
+                    priceInput('script', 'Estimated script charge (USD)')
+                  ) : (
+                    <>
+                      {priceInput('visual', 'Estimated visual charge per scene (USD)')}
+                      {!local && priceInput('voice', 'Estimated voice charge per scene (USD)')}
+                    </>
+                  )}
+                  {priceInput('limit', 'Estimated spending limit (USD)')}
+                  <Text size="sm" c={overBudget ? 'red' : undefined}>
+                    Estimated total ${estimate.toFixed(2)} USD.{' '}
+                    {overBudget ? 'This exceeds your limit.' : 'Actual charges come from your provider.'}
+                  </Text>
+                </>
+              ) : (
+                <Text size="sm">Provider price unavailable. Check provider pricing before proceeding.</Text>
+              )}
+            </>
+          )}
           <div className="provider-settings">
             {visible.map((stage) => {
               const {label, providers} = stages[stage];
@@ -245,7 +409,7 @@ export function PaidDialog({
               );
             })}
           </div>
-          {mode !== 'plan' && (
+          {!resume && mode !== 'plan' && (
             <FileInput
               label="Soundtrack"
               placeholder="Choose optional background audio"
@@ -276,13 +440,15 @@ export function PaidDialog({
                 type="submit"
                 className="primary"
                 leftSection={<Sparkles size={16} />}
-                disabled={!topic.trim() || missingEndpointKey}
+                disabled={!ready || !!missingEndpointKey}
               >
-                {mode === 'plan'
-                  ? 'Generate storyboard'
-                  : mode === 'prepare'
-                    ? 'Prepare scenes'
-                    : 'Generate and export'}
+                {resume
+                  ? 'Resume'
+                  : mode === 'plan'
+                    ? 'Generate storyboard'
+                    : mode === 'prepare'
+                      ? 'Prepare scenes'
+                      : 'Generate and export'}
               </Button>
             </Group>
           </Group>

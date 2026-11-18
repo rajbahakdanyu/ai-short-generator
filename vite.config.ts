@@ -7,7 +7,10 @@ export default defineConfig({
     rolldownOptions: {
       output: {
         codeSplitting: {
-          groups: [{name: 'react-runtime', test: /[/]node_modules[/](?:react|react-dom|scheduler)[/]/}],
+          groups: [
+            {name: 'react-runtime', test: /[/]node_modules[/](?:react|react-dom|scheduler)[/]/},
+            {name: 'remotion-player', test: /[/]node_modules[/](?:remotion|@remotion[/]player)[/]/},
+          ],
         },
       },
     },

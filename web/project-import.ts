@@ -1,23 +1,7 @@
 import {z} from 'zod';
-import {kokoroVoiceSchema, projectSchema} from '../src/project.ts';
+import {projectSchema, storyboardSchema} from '../src/project.ts';
 import {FPS} from '../src/timing.ts';
 import {type Asset, type Draft, freshScene} from './model.ts';
-
-const storyboardSchema = z.object({
-  title: z.string().trim().min(1),
-  scenes: z
-    .array(
-      z.object({
-        narration: z.string().trim().min(1),
-        kokoroVoice: kokoroVoiceSchema.optional(),
-        image: z.string().min(1).optional(),
-        video: z.string().min(1).optional(),
-        imagePrompt: z.string().min(1).optional(),
-      }),
-    )
-    .min(1),
-  music: z.string().min(1).optional(),
-});
 
 type LoadAsset = (filename: string, kind: Asset['kind']) => Promise<Asset | undefined>;
 
@@ -26,17 +10,24 @@ function namedScene(narration: string, index: number) {
 }
 
 async function loadStoryboard(input: unknown, load: LoadAsset): Promise<Draft> {
-  const {title, scenes, music} = storyboardSchema.parse(input);
+  const {title, scenes, music, musicVolume} = storyboardSchema.parse(input);
   return {
     title,
     scenes: await Promise.all(
       scenes.map(async (scene, index) => ({
         ...namedScene(scene.narration, index),
+        name: scene.name ?? `Scene ${index + 1}`,
+        sources: scene.sources,
         imagePrompt: scene.imagePrompt,
         kokoroVoice: scene.kokoroVoice,
         media: await loadVisual(scene, load),
+        voice: scene.audio ? await load(scene.audio, 'audio') : undefined,
+        seconds: scene.frames ? scene.frames / FPS : undefined,
+        frames: scene.frames,
+        captions: scene.captions,
       })),
     ),
+    musicVolume,
     music: music ? await load(music, 'audio') : undefined,
   };
 }
@@ -47,7 +38,7 @@ async function loadVisual(scene: {video?: string; image?: string}, load: LoadAss
 }
 
 async function loadProject(input: unknown, load: LoadAsset): Promise<Draft> {
-  const {title, scenes, music} = projectSchema.parse(input);
+  const {title, scenes, music, musicVolume} = projectSchema.parse(input);
   const fromAssets: LoadAsset = (file, kind) => load(`assets/${file}`, kind);
   return {
     title,
@@ -64,6 +55,8 @@ async function loadProject(input: unknown, load: LoadAsset): Promise<Draft> {
         }
         return {
           ...namedScene(scene.narration, index),
+          name: scene.name ?? `Scene ${index + 1}`,
+          sources: scene.sources,
           imagePrompt: scene.imagePrompt,
           kokoroVoice: scene.kokoroVoice,
           media,
@@ -74,6 +67,7 @@ async function loadProject(input: unknown, load: LoadAsset): Promise<Draft> {
         };
       }),
     ),
+    musicVolume,
     music: music ? await fromAssets(music, 'audio') : undefined,
   };
 }
@@ -120,10 +114,10 @@ export async function importJob(id: string): Promise<Draft> {
       manifest: z.unknown(),
     })
     .parse(await response.json());
-  if (kind === 'storyboard') return loadStoryboard(manifest, async () => undefined);
-  return loadProject(manifest, async (file, kind) => {
-    const asset = await fetch(`${base}/${file}`);
+  const load: LoadAsset = async (file, kind) => {
+    const asset = await fetch(`${base}/${file.startsWith('assets/') ? file : `assets/${file}`}`);
     if (!asset.ok) throw new Error(`Could not open generated asset ${file}.`);
     return {kind, name: file.split('/').at(-1) ?? file, source: await asset.blob()};
-  });
+  };
+  return kind === 'storyboard' ? loadStoryboard(manifest, load) : loadProject(manifest, load);
 }

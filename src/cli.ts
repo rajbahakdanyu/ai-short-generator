@@ -1,4 +1,4 @@
-import {mkdir, mkdtemp, writeFile} from 'node:fs/promises';
+import {access, mkdir, mkdtemp, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 import {parseArgs} from 'node:util';
 import {demoProject} from './demo.ts';
@@ -14,6 +14,7 @@ const usage = `Usage
   pnpm generate --storyboard path/to/storyboard.json [--music path/to/track.mp3] [--prepare-only]
   pnpm generate --paid-topic "Your topic" [--music path/to/track.mp3] [--prepare-only]
   pnpm generate --paid-topic "Your topic" --plan-only
+  pnpm generate --resume-paid output/your-project [--prepare-only]
   pnpm generate --demo [--music path/to/track.mp3] [--prepare-only]
   pnpm generate --render output/your-project
 
@@ -26,6 +27,7 @@ async function main() {
       demo: {type: 'boolean'},
       storyboard: {type: 'string'},
       'paid-topic': {type: 'string'},
+      'resume-paid': {type: 'string'},
       'plan-only': {type: 'boolean'},
       'kokoro-voice': {type: 'string'},
       'prepare-only': {type: 'boolean'},
@@ -40,13 +42,14 @@ async function main() {
     return;
   }
   const topic = values['paid-topic']?.trim();
+  const resume = values['resume-paid'] && resolve(values['resume-paid']);
   const planOnly = values['plan-only'] ?? false;
-  const modes = [values.storyboard, values.demo, values.render, topic].filter(Boolean);
+  const modes = [values.storyboard, values.demo, values.render, topic, resume].filter(Boolean);
   if (
     modes.length !== 1 ||
     (planOnly && !topic) ||
     (values['prepare-only'] && (planOnly || values.render)) ||
-    ((values.render || planOnly) && values.music !== undefined)
+    ((values.render || planOnly || resume) && values.music !== undefined)
   ) {
     throw new Error(usage);
   }
@@ -63,7 +66,8 @@ async function main() {
     source && voice
       ? {...source, scenes: source.scenes.map((scene) => ({...scene, kokoroVoice: voice}))}
       : source;
-  const provider = topic ? paidProviders(planOnly, voice ? {voice: {voice}} : undefined) : undefined;
+  const provider =
+    topic || resume ? paidProviders(planOnly, voice ? {voice: {voice}} : undefined) : undefined;
   if (voice && provider && provider.voice?.provider !== 'kokoro') {
     throw new Error('--kokoro-voice requires VOICE_PROVIDER=kokoro in paid mode.');
   }
@@ -79,21 +83,34 @@ async function main() {
     .slice(0, 64);
   const output = resolve('output');
   await mkdir(output, {recursive: true});
-  const directory = await mkdtemp(join(output, `${slug || (values.demo ? 'demo' : 'short')}-`));
+  const directory = resume || (await mkdtemp(join(output, `${slug || (values.demo ? 'demo' : 'short')}-`)));
+  if (resume) {
+    await access(join(directory, 'storyboard.json')).catch(() => {
+      throw new Error('Resume requires an existing paid storyboard.');
+    });
+  }
   const assets = join(directory, 'assets');
-  await mkdir(assets);
+  await mkdir(assets, {recursive: true});
   console.log(`Project directory ${directory}`);
   let music: 'music.wav' | undefined;
+  if (resume)
+    music = await access(join(assets, 'music.wav')).then(
+      () => 'music.wav' as const,
+      () => undefined,
+    );
   if (values.music !== undefined) {
     music = 'music.wav';
     await toWav(resolve(values.music), join(assets, music));
   }
-  const result =
-    topic && provider
-      ? await buildPaidShort(provider, topic, directory)
-      : board
-        ? await buildStoryboard(board, directory)
-        : await demoProject(assets, music);
+  const result = provider
+    ? await buildPaidShort(provider, topic ?? '', directory, {
+        async report(detail) {
+          console.log(detail);
+        },
+      })
+    : board
+      ? await buildStoryboard(board, directory)
+      : await demoProject(assets, music);
   if (typeof result === 'string') {
     console.log(`Storyboard saved to ${result}`);
     return;

@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "esModuleInterop": true
   },
-  "include": ["src", "web", "server", "vite.config.ts"]
+  "include": ["src", "web", "server", "test", "vite.config.ts"]
 }

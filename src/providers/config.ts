@@ -83,14 +83,15 @@ function stageConfig<P extends Provider>(
   const endpoint = URL.parse(baseUrl);
   if (
     !endpoint ||
-    !['http:', 'https:'].includes(endpoint.protocol) ||
+    (endpoint.protocol !== 'https:' &&
+      !(endpoint.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname))) ||
     endpoint.username ||
     endpoint.password ||
     endpoint.search ||
     endpoint.hash
   ) {
     throw new Error(
-      `${stage}_BASE_URL must be an HTTP(S) API base URL without credentials, query, or fragment.`,
+      `${stage}_BASE_URL must use HTTPS (HTTP is allowed on loopback) without credentials, query, or fragment.`,
     );
   }
 
@@ -154,17 +155,22 @@ function imageConfig(selection?: PaidSelection['image']) {
   };
 }
 
-export function paidProviders(planOnly: boolean, selection?: PaidSelection) {
+export function paidProviders(
+  planOnly: boolean,
+  selection?: PaidSelection,
+  video = false,
+  hasStoryboard = false,
+) {
   try {
     loadEnvFile();
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
-  const script = stageConfig('SCRIPT', scriptProviders, selection?.script);
+  const script = hasStoryboard ? undefined : stageConfig('SCRIPT', scriptProviders, selection?.script);
   if (planOnly) return {script};
   return {
     script,
-    image: imageConfig(selection?.image),
+    image: video ? undefined : imageConfig(selection?.image),
     voice: voiceConfig(selection?.voice),
   };
 }
@@ -176,4 +182,5 @@ export type RemoteConfig = {
   apiKey: string;
   model: string;
   officialOpenAi: boolean;
+  signal?: AbortSignal;
 };

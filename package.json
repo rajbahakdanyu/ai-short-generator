@@ -14,7 +14,8 @@
     "studio:preview": "vite preview",
     "typecheck": "tsc",
     "lint": "biome lint --error-on-warnings .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "5.3.0",
@@ -22,7 +23,9 @@
     "@mantine/core": "9.8.1",
     "@mantine/hooks": "9.8.1",
     "@remotion/bundler": "4.0.544",
+    "@remotion/player": "4.0.544",
     "@remotion/renderer": "4.0.544",
+    "busboy": "1.6.0",
     "idb-keyval": "6.3.0",
     "lucide-react": "1.74.0",
     "react": "19.3.1",
@@ -32,6 +35,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.8",
+    "@types/busboy": "1.5.4",
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

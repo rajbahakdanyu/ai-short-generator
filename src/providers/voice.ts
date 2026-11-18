@@ -1,5 +1,5 @@
 import type {RemoteConfig} from './config.ts';
-import {geminiParts, request} from './http.ts';
+import {geminiParts, readProviderBytes, request} from './http.ts';
 
 const direction =
   'Speak like a curious documentary host. Use natural phrasing and emphasis, with a conversational pace.';
@@ -60,7 +60,7 @@ export async function generateVoice(config: RemoteConfig & {voice: string; forma
       response_format: format,
       ...(officialOpenAi && model.startsWith('gpt-4o-mini-tts') && {instructions: direction}),
     });
-    if (format === 'pcm') return pcmWave(Buffer.from(await response.arrayBuffer()), 24000);
+    if (format === 'pcm') return pcmWave(await readProviderBytes(response), 24000);
   }
-  return Buffer.from(await response.arrayBuffer());
+  return await readProviderBytes(response);
 }

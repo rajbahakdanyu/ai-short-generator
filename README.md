@@ -1,6 +1,6 @@
 # AI Short Generator
 
-Make an illustrated educational Short from your own storyboard or from a topic using a paid API. The storyboard workflow uses local Kokoro narration. Remotion adds motion and captions and exports the video locally in both workflows.
+Make an illustrated or cinematic educational Short from your own storyboard or from a topic using a paid API. The storyboard workflow uses local Kokoro narration. Remotion adds motion and captions and exports the video locally in both workflows.
 
 ## Setup
 
@@ -17,6 +17,8 @@ The first render may download Remotion's headless browser.
 
 Run `pnpm check` for Biome linting, import organisation, formatting checks, and TypeScript type checking. Use `pnpm lint` to run only the linter or `pnpm format` to format files in place. Run `pnpm exec biome check --write .` to also organise imports and apply safe fixes.
 
+Run `pnpm test` for caption, project format, provider, and Studio recovery tests with mocked paid calls. The integration test uses local FFmpeg. Run `pnpm generate --demo` to exercise the full MP4 render.
+
 Biome uses its recommended rules and enforces React hook checks, type-only imports, unused code checks, and explicit `node:` imports. Generated output, render caches, and local model files are excluded.
 
 ## Open Short Studio
@@ -28,17 +30,21 @@ pnpm studio
 Open [Short Studio](http://127.0.0.1:5173/). The bundled black-hole project opens on first launch. Use **Project** to start a blank draft, paste a script with one scene per paragraph, open a project folder, generate from a topic, or reload the sample.
 
 - Add, rename, reorder, or delete scenes. Drop a still image or MP4 into each scene's **Visual** field.
-- Pick a **Local voice** for each scene, then use **Generate voice** and **Play** to audition it. Heart is the default. Changing voices resets the recording and caption timing for that scene. Edit caption text and timing in **Captions** after generating the new recording. Install Kokoro with `pnpm setup:voice` if it is missing. The bundled sample can preview and export without installing Kokoro.
-- Select **Full Short** in the preview to play and scrub across scenes, or **Scene** to focus on the selected shot. The preview plays available narration and the optional soundtrack.
-- Use **Export MP4** to render and download the video. The saved project and MP4 live under `output/studio-*/`. An optional soundtrack is mixed during export.
+- Pick a **Local voice** for each scene, then use **Generate voice** and **Play** to audition it. Heart is the default. Narration or voice edits mark the recording as outdated and keep the old edit in undo history. Voice replacement resets cue timing after confirmation. Upload your own recording or edit duration and individual cues in **Scene details**. Install Kokoro with `pnpm setup:voice` if it is missing. The bundled sample can preview and export without installing Kokoro.
+- Select **Full Short** in the preview to play and scrub across scenes, or **Scene** to focus on the selected shot. The preview uses the same Remotion composition as export and plays available narration and the optional soundtrack.
+- Use **Export MP4** to render and download the video. The saved project and MP4 live under `output/studio-*/`. Use the soundtrack volume control to set its level in preview and export.
 
 **Project → Open project folder** opens a folder containing `storyboard.json` or a prepared `project.json` and `assets/`. For a prepared project, Studio reuses the narration, captions, and scene lengths when exporting. For a storyboard, put the referenced stills and clips inside the selected folder.
 
-**Project → Generate from topic** offers storyboard-only, prepare-for-editing, and full MP4 export. Each stage lets you enter its provider, model, API key, and optional custom base URL. Image options and compatible voice output formats can also be set in the dialog. A custom URL requires an explicit key for that stage so a saved key is never sent there by accident.
+Use **Project → Save a copy** to keep a named copy in the browser. Studio also saves a recovery copy before replacing the active draft. Open those copies from **Saved projects**, or use **Download editable draft** and **Open editable draft** to move a project with its media between browsers. Undo and redo are available from the Project menu.
 
-Keys entered in Studio are masked and held in that tab's memory until you reload it or use **Clear overrides**. They are sent to the local Studio server when you submit a paid run and are excluded from saved drafts and project files. Leave fields blank to use `.env` or provider defaults. Restart Studio after changing `.env`. Open generated projects from the result dialog or import them later from `output/studio-*/`.
+For paid generation, start with **Project → Generate from topic → Storyboard only**. Open the storyboard from the result dialog, review the claims, and add references in **Sources and verification notes**. Return to the generation dialog to prepare the current storyboard or generate its MP4. Choose still illustrations or cinematic portrait clips through [fal WAN 2.7](https://fal.ai/models/fal-ai/wan/v2.7/text-to-video/api). Video generation uses the entered fal key or `FAL_KEY`. The dialog shows the number of generation requests and can enforce a spending estimate based on rates you enter. Studio records attempted generation requests and checks the estimated limit again on retries. You can raise the total estimate limit before resuming. Actual billing comes from the provider.
 
-The editor saves one draft plus imported media in the browser on this device. The server listens on loopback. Importing, previewing, and exporting an existing project make no paid API calls.
+Custom API endpoints require an explicit key when entered in Studio and must use HTTPS outside loopback. Asset downloads from providers require public HTTPS. Keys entered in Studio are kept in tab memory and excluded from job and project files. Leave fields blank to use `.env` settings or provider defaults.
+
+**Project → Generation history** shows job status and disk size and lets you reopen or explicitly delete output. Failed or stopped paid jobs can resume from their saved storyboard and reuse completed assets. Failed local exports can retry rendering once the prepared project exists. Re-enter any tab-only provider settings after a reload. Stopping a job halts local processing and new requests. Work already accepted by the provider may finish and incur charges.
+
+Studio listens on loopback. The editor and local MP4 export make no paid API calls. Studio accepts up to 256 MB per upload and 64 MB per file. Visuals support up to 4096 pixels per side. Prepared projects support up to 100 scenes, two minutes per scene, and ten minutes total.
 
 For a production frontend build, run `pnpm build` followed by `pnpm studio:preview`.
 
@@ -151,7 +157,7 @@ Add `--plan-only` to call only the script provider and write a storyboard with i
 pnpm generate --paid-topic "Why does the Moon look bigger near the horizon?" --plan-only
 ```
 
-Add your own images or MP4 clips to that storyboard and finish with `--storyboard` or open the folder in Studio. Add `--prepare-only` to the full paid command to generate images and narration and stop before rendering. The paid route currently generates still illustrations. Captions and rendering run locally in every mode. Studio only calls paid APIs when you submit **Generate from topic**. The demo, storyboard, and rerender commands make no paid API calls.
+Add your own images or MP4 clips to that storyboard and finish with `--storyboard` or open the folder in Studio. Add `--prepare-only` to the full paid command to generate images and narration and stop before rendering. The CLI paid route generates still illustrations. To recover a paid CLI run with a saved storyboard, use `pnpm generate --resume-paid output/your-project` with the original provider settings. Captions and rendering run locally in every mode. Studio only calls paid APIs when you submit **Generate from topic**. The demo, storyboard, and rerender commands make no paid API calls.
 
 ### Demo illustration prompts
 

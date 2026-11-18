@@ -1,7 +1,8 @@
 import {setTimeout} from 'node:timers/promises';
 import {z} from 'zod';
+import {downloadAsset} from './asset-download.ts';
 import type {RemoteConfig} from './config.ts';
-import {downloadAsset, geminiParts, request} from './http.ts';
+import {geminiParts, readProviderJson, request} from './http.ts';
 
 const imageReply = z.object({
   data: z.array(z.object({url: z.string().optional(), b64_json: z.string().optional()})),
@@ -20,18 +21,18 @@ async function generateReplicate(config: RemoteConfig, prompt: string, options: 
     {input: {...options, prompt}},
     {Prefer: 'wait=60'},
   );
-  let prediction = state.parse(await response.json());
+  let prediction = state.parse(await readProviderJson(response));
 
   for (let attempt = 0; attempt < 60 && ['starting', 'processing'].includes(prediction.status); attempt++) {
-    await setTimeout(2000);
+    await setTimeout(2000, undefined, {signal: config.signal});
     const update = await request(config, `/predictions/${encodeURIComponent(prediction.id)}`);
-    prediction = state.parse(await update.json());
+    prediction = state.parse(await readProviderJson(update));
   }
   if (prediction.status !== 'succeeded')
     throw new Error(`Replicate prediction ${prediction.id} ended at status "${prediction.status}".`);
   const url = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
   if (!url) throw new Error('Replicate returned no image.');
-  return downloadAsset(url);
+  return downloadAsset(url, config.signal);
 }
 
 export async function generateImage(
@@ -48,7 +49,7 @@ export async function generateImage(
         parameters: {sampleCount: 1, aspectRatio: aspect, ...options},
       });
       const schema = z.object({predictions: z.array(z.object({bytesBase64Encoded: z.string()}))});
-      const image = schema.parse(await response.json()).predictions[0]?.bytesBase64Encoded;
+      const image = schema.parse(await readProviderJson(response)).predictions[0]?.bytesBase64Encoded;
       if (!image) throw new Error('Imagen returned no image.');
       return Buffer.from(image, 'base64');
     }
@@ -65,9 +66,9 @@ export async function generateImage(
     const shape = model.startsWith('xai/') ? {aspect_ratio: aspect} : {};
     const response = await request(config, `/${path}`, {...shape, ...options, prompt});
     const schema = z.object({images: z.array(z.object({url: z.string()}))});
-    const url = schema.parse(await response.json()).images[0]?.url;
+    const url = schema.parse(await readProviderJson(response)).images[0]?.url;
     if (!url) throw new Error('fal returned no image.');
-    return downloadAsset(url);
+    return downloadAsset(url, config.signal);
   }
   if (provider === 'replicate') return generateReplicate(config, prompt, options);
 
@@ -85,8 +86,8 @@ export async function generateImage(
     model,
     prompt,
   });
-  const result = imageReply.parse(await response.json()).data[0];
+  const result = imageReply.parse(await readProviderJson(response)).data[0];
   if (result?.b64_json) return Buffer.from(result.b64_json, 'base64');
-  if (result?.url) return downloadAsset(result.url);
+  if (result?.url) return downloadAsset(result.url, config.signal);
   throw new Error(`${provider} returned no image.`);
 }

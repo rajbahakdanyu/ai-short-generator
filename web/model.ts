@@ -13,16 +13,25 @@ export type DraftScene = {
   seconds?: number;
   frames?: number;
   imagePrompt?: string;
+  sources?: string;
+  voiceOutdated?: boolean;
   captions?: Scene['captions'];
 };
-export type Draft = {title: string; scenes: DraftScene[]; music?: Asset};
+export type Draft = {title: string; scenes: DraftScene[]; music?: Asset; musicVolume?: number};
 export type Job = {
-  phase: 'Uploading media' | 'Preparing scenes' | 'Rendering video' | 'Complete' | 'Failed';
+  phase: 'Uploading media' | 'Preparing scenes' | 'Rendering video' | 'Complete' | 'Failed' | 'Cancelled';
   progress: number;
   error?: string;
   id?: string;
   hasDraft?: boolean;
   hasVideo?: boolean;
+  detail?: string;
+  startedAt?: number;
+  resumable?: boolean;
+  resumeNeedsProviders?: boolean;
+  usage?: {script: number; visual: number; voice: number};
+  spendingLimit?: number;
+  estimatedSpend?: number;
 };
 
 const sampleFiles = import.meta.glob(
@@ -76,11 +85,10 @@ export const sampleDraft: Draft = {
 
 export const secondsFor = (scene: DraftScene) =>
   scene.seconds ?? Math.max(2, scene.narration.trim().split(/\s+/).filter(Boolean).length / 2.5);
+export const framesFor = (scene: DraftScene) => scene.frames ?? Math.ceil(secondsFor(scene) * FPS) + 3;
 export const captionsFor = (scene: DraftScene) =>
   scene.captions ??
-  (scene.narration.trim()
-    ? narrationCaptions(scene.narration.trim(), Math.ceil(secondsFor(scene) * FPS) + 3)
-    : []);
+  (scene.narration.trim() ? narrationCaptions(scene.narration.trim(), framesFor(scene)) : []);
 
 export function freshScene(narration = ''): DraftScene {
   return {id: crypto.randomUUID(), name: 'Untitled scene', narration};
@@ -92,8 +100,7 @@ export function formatTime(seconds: number) {
 }
 
 export function assetUrl(source: string) {
-  const filename = source.startsWith('sample:') ? source.slice(7) : source.split('/').at(-1);
-  return sampleFiles[`../demo/${filename}`] ?? source;
+  return source.startsWith('sample:') ? (sampleFiles[`../demo/${source.slice(7)}`] ?? source) : source;
 }
 
 export async function assetBlob(asset: Asset) {
@@ -103,11 +110,20 @@ export async function assetBlob(asset: Asset) {
   return response.blob();
 }
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 export async function api(path: string, init?: RequestInit) {
   const response = await fetch(`/api/studio/${path}`, init);
   if (!response.ok) {
     const detail = await response.json().catch(() => null);
-    throw new Error(detail?.error ?? `Studio returned HTTP ${response.status}.`);
+    throw new ApiError(detail?.error ?? `Studio returned HTTP ${response.status}.`, response.status);
   }
   return response;
 }
