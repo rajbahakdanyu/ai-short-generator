@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {randomUUID} from 'node:crypto';
 import {bundle} from '@remotion/bundler';
 import {renderMedia, selectComposition} from '@remotion/renderer';
-import {projectSchema} from './project.js';
+import {projectSchema} from './project.ts';
 
 export async function renderShort(directory: string) {
   const inputProps = projectSchema.parse(JSON.parse(await readFile(join(directory, 'project.json'), 'utf8')));

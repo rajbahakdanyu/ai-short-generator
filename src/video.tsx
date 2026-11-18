@@ -2,7 +2,7 @@ import {
   AbsoluteFill, Audio, Composition, Img, interpolate, registerRoot,
   Sequence, staticFile, useCurrentFrame, useVideoConfig,
 } from 'remotion';
-import {FPS, type Project, type Scene} from './project.js';
+import {FPS, type Project, type Scene} from './project.ts';
 
 function Slide({scene, index}: {scene: Scene; index: number}) {
   const frame = useCurrentFrame();
@@ -39,7 +39,7 @@ function Short({scenes, music}: Project) {
   let start = 0;
   return (
     <AbsoluteFill>
-      {music && <Audio src={staticFile(music)} loop volume={(frame) => (
+      {music && <Audio src={staticFile(music)} loop loopVolumeCurveBehavior="extend" volume={(frame) => (
         0.13 * Math.max(0, Math.min(1, frame / 15, (durationInFrames - frame) / 24))
       )} />}
       {scenes.map((scene, index) => {
