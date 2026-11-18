@@ -2,7 +2,7 @@ import {copyFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {audioFrames, run, toWav} from './media.ts';
-import {FPS, type Project} from './project.ts';
+import {estimatedCaptions, FPS, type Project} from './project.ts';
 
 const shots = [
   {
@@ -36,15 +36,7 @@ export async function demoProject(assets: string, suppliedMusic?: Project['music
     await toWav(fileURLToPath(new URL(`../demo/${id}.flac`, import.meta.url)), wav);
 
     const frames = await audioFrames(wav);
-    // Weight phrases by length and allow extra time for spoken pauses.
-    const weights = phrases.map((phrase) => phrase.length + (/[.!?]$/.test(phrase) ? 8 : 0));
-    const secondsPerWeight = (frames - 3) / FPS / weights.reduce((sum, weight) => sum + weight, 0);
-    let time = 0;
-    const captions = phrases.map((text, i) => {
-      const start = time;
-      time += weights[i] * secondsPerWeight;
-      return {text, start, end: time};
-    });
+    const captions = estimatedCaptions(phrases, frames);
     scenes.push({narration, audio, frames, captions, imagePrompt, image});
   }
 

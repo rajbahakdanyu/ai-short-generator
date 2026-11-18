@@ -1,6 +1,6 @@
 # AI Short Generator
 
-Turn a topic into a narrated, illustrated educational Short. OpenAI generates an eight-scene storyboard, portrait illustrations, voiceover, and word timestamps. Remotion assembles the assets on your Mac with slow pans, zooms, caption overlays, and an optional music bed.
+Turn a ChatGPT-written script and scene illustrations into an educational Short. Kokoro narrates on your Mac, and Remotion adds motion and captions and exports the video locally. The CLI uses no paid APIs.
 
 ## Setup
 
@@ -21,26 +21,40 @@ pnpm generate --demo
 
 The demo uses four bundled black hole illustrations, bundled neural narration, estimated phrase-level caption timing, and a locally synthesized ambient bed. The narration was generated locally with [Kokoro ONNX](https://github.com/thewh1teagle/kokoro-onnx) using its `af_heart` voice. Running the demo requires neither the model files nor an API key.
 
-## Generate from a topic
+## Make a Short with ChatGPT and local narration
 
-```sh
-cp .env.example .env
-# Add your OpenAI API key to .env.
-pnpm generate "Why does time slow down near a black hole?"
+1. Run `pnpm setup:voice` once. It uses Python 3.12 and downloads about 340 MB of Kokoro model and voice files into the ignored `.kokoro/` directory.
+2. Ask ChatGPT for a script split into scenes and a portrait illustration for each scene. For a roughly 45-second Short, ask for about 100 spoken words across six to eight scenes.
+3. Save the images and a `storyboard.json` together. Image paths are relative to the storyboard file. Each scene supplies its exact spoken text and one local image.
+
+```json
+{
+  "title": "Why do black holes look bright?",
+  "scenes": [
+    {
+      "narration": "If light can't escape a black hole, what is that glowing ring?",
+      "image": "scene-1.png"
+    },
+    {
+      "narration": "It's hot gas orbiting outside the event horizon.",
+      "image": "scene-2.png"
+    }
+  ]
+}
 ```
 
-To add background music, append `--music /path/to/licensed-track.mp3`. The renderer loops the track underneath the narration at reduced volume and fades it in and out.
+```sh
+pnpm generate --storyboard path/to/storyboard.json
+```
 
-The final video is a 1080 × 1920, 30 fps H.264 MP4 with AAC audio. The storyboard targets roughly 45 seconds. The actual length follows the generated narration.
+Append `--music /path/to/track.mp3` to mix a local track under the narration. The final export is a 1080 × 1920, 30 fps H.264 MP4 with AAC audio.
 
-Each run prints its unique directory under `output/`. It contains `project.json`, the source media in `assets/`, and the finished `short.mp4`. You can edit caption text or timing in `project.json` and render again without making any API calls.
+Each run prints a unique directory under `output/` containing the source storyboard, `project.json`, the converted images and narration in `assets/`, and `short.mp4`. Caption timing is estimated from each scene's narration length. You can edit captions in `project.json` and rerender without regenerating narration.
 
 ```sh
 pnpm generate --render output/your-project-directory
 pnpm check
 ```
-
-Topic generation uses billable OpenAI endpoints. Keep `.env` local and check that your API project has access to the configured models. Review facts, narration, and captions before publishing. Upload the MP4 manually to your chosen platforms.
 
 ### Demo illustration prompts
 

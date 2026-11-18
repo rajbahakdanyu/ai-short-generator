@@ -7,12 +7,12 @@
   },
   "scripts": {
     "generate": "tsx src/cli.ts",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "setup:voice": "bash scripts/setup-voice.sh"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.544",
     "@remotion/renderer": "4.0.544",
-    "openai": "7.57.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "remotion": "4.0.544",

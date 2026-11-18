@@ -11,7 +11,7 @@ export const projectSchema = z.object({
   title: z.string().min(1),
   scenes: z.array(z.object({
     narration: z.string().min(1),
-    imagePrompt: z.string().min(1),
+    imagePrompt: z.string().min(1).optional(),
     image: z.string().regex(/^scene-\d+\.jpg$/).optional(),
     audio: z.string().regex(/^scene-\d+\.wav$/),
     frames: z.number().int().positive(),
@@ -23,24 +23,14 @@ export const projectSchema = z.object({
 export type Project = z.infer<typeof projectSchema>;
 export type Scene = Project['scenes'][number];
 
-export function groupWords(words: {word: string; start: number; end: number}[]) {
-  const cues: Scene['captions'] = [];
-  let group: typeof words = [];
-  const flush = () => {
-    if (!group.length) return;
-    cues.push({
-      text: group.map(({word}) => word.trim()).join(' '),
-      start: group[0].start,
-      end: group[group.length - 1].end,
-    });
-    group = [];
-  };
-
-  for (const word of words) {
-    if (!word.word.trim() || word.end <= word.start || word.start < 0) continue;
-    group.push(word);
-    if (group.length === 5 || /[.!?]$/.test(word.word.trim())) flush();
-  }
-  flush();
-  return cues;
+export function estimatedCaptions(phrases: string[], frames: number): Scene['captions'] {
+  // Allow extra time for pauses at the ends of sentences.
+  const weights = phrases.map((text) => text.length + (/[.!?]$/.test(text) ? 8 : 0));
+  const secondsPerWeight = (frames - 3) / FPS / weights.reduce((sum, weight) => sum + weight, 0);
+  let end = 0;
+  return phrases.map((text, index) => {
+    const start = end;
+    end += weights[index] * secondsPerWeight;
+    return {text, start, end};
+  });
 }
