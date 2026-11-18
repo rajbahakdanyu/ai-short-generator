@@ -4,7 +4,7 @@ Make an illustrated educational Short from your own storyboard or from a topic u
 
 ## Setup
 
-Use Node.js 22 or newer, pnpm 12, and FFmpeg with `ffprobe` on your PATH.
+Use Node.js 26.13.1 or newer, pnpm 12, and FFmpeg with `ffprobe` on your PATH.
 
 ```sh
 brew install ffmpeg
