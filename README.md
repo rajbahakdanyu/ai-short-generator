@@ -19,7 +19,7 @@ The first render may download Remotion's headless browser.
 pnpm generate --demo
 ```
 
-The macOS demo uses system speech, estimated caption timestamps, and an abstract black hole background. It makes no OpenAI calls.
+The macOS demo uses four bundled black hole illustrations, system speech, estimated phrase-level caption timing, and a locally synthesized ambient bed. It makes no OpenAI calls.
 
 ## Generate from a topic
 
@@ -41,3 +41,12 @@ pnpm check
 ```
 
 Topic generation uses billable OpenAI endpoints. Keep `.env` local and check that your API project has access to the configured models. Review facts, narration, and captions before publishing. Upload the MP4 manually to your chosen platforms.
+
+### Demo illustration prompts
+
+The four bundled JPEGs in `demo/` were created with the built-in ImageGen tool. Each prompt used vertical, full-bleed cinematic science-documentary framing with natural film grain and a quiet lower quarter for captions. The palette used deep navy, black, and white-hot amber, with no lettering or logos.
+
+1. A tilted close-up of a stellar black hole with a bright asymmetric amber disk bent over and under the dark shadow.
+2. A side-on close-up of turbulent incandescent gas, with intricate copper and ivory filaments in orbital flow.
+3. A distant black hole warping a cool-blue background starfield into slender, duplicated arcs around the shadow.
+4. A deep-space wide shot with a thin, asymmetric golden arc and a vast field of cold stars.

@@ -8,24 +8,29 @@ function Slide({scene, index}: {scene: Scene; index: number}) {
   const frame = useCurrentFrame();
   const progress = frame / scene.frames;
   const caption = scene.captions.find(({start, end}) => start <= frame / FPS && frame / FPS < end);
-  const fade = Math.min(1, (frame + 1) / 5, (scene.frames - frame) / 5);
-  const translate = (index % 2 ? -1 : 1) * interpolate(progress, [0, 1], [-22, 22]);
+  const captionAge = caption ? Math.max(0, frame - caption.start * FPS) : 0;
+  const captionRise = interpolate(captionAge, [0, 4], [10, 0], {extrapolateRight: 'clamp'});
+  const pushIn = index % 2 === 0;
+  const scale = interpolate(progress, [0, 1], pushIn ? [1.05, 1.18] : [1.18, 1.05]);
+  const translate = interpolate(progress, [0, 1], pushIn ? [-20, 12] : [20, -12]);
   return (
     <AbsoluteFill style={{backgroundColor: '#0b0d15', overflow: 'hidden'}}>
-      <AbsoluteFill style={{opacity: fade, transform: `translateX(${translate}px) scale(${1.06 + progress * 0.12})`}}>
+      <AbsoluteFill style={{transform: `translateX(${translate}px) scale(${scale})`}}>
         {scene.image ? (
           <Img src={staticFile(scene.image)} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
         ) : (
           <AbsoluteFill style={{background: 'radial-gradient(ellipse at 50% 39%, #03050c 11%, #241842 15%, #d47953 17%, #592f67 23%, #101731 43%, #03050c 72%)'}} />
         )}
       </AbsoluteFill>
-      <AbsoluteFill style={{background: 'linear-gradient(transparent 50%, #04050d99 77%, #04050ddd 100%)'}} />
+      <AbsoluteFill style={{background: 'linear-gradient(transparent 47%, #04050d60 70%, #04050de8 100%)'}} />
       <Audio src={staticFile(scene.audio)} />
       {caption && (
         <div style={{
-          position: 'absolute', bottom: 320, left: 90, right: 140, textAlign: 'center',
-          color: '#fff', fontFamily: 'Arial, sans-serif', fontWeight: 800, fontSize: 70,
-          lineHeight: 1.08, textShadow: '0 4px 5px #000, 0 0 22px #000',
+          position: 'absolute', bottom: 352, left: 80, right: 144, textAlign: 'left',
+          color: index === 0 ? '#ffdfa0' : '#fff', fontFamily: 'Helvetica Neue, Arial, sans-serif',
+          fontWeight: 850, fontSize: index === 0 ? 87 : 74, letterSpacing: -2,
+          lineHeight: 1.02, textWrap: 'balance', textShadow: '0 3px 10px #03050c, 0 0 28px #03050c',
+          transform: `translateY(${captionRise}px)`,
         }}>
           {caption.text}
         </div>

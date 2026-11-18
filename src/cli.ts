@@ -2,7 +2,8 @@ import {mkdir, mkdtemp, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 import {loadEnvFile} from 'node:process';
 import {parseArgs} from 'node:util';
-import {demoProject, generateProject} from './generation.ts';
+import {demoProject} from './demo.ts';
+import {generateProject} from './generation.ts';
 import {run, toWav} from './media.ts';
 import {FPS, projectSchema} from './project.ts';
 import {renderShort} from './render.ts';
@@ -65,8 +66,8 @@ async function main() {
     await toWav(resolve(values.music), join(assets, music));
   }
   const project = projectSchema.parse({
-    ...(values.demo ? await demoProject(assets) : await generateProject(topic, assets)),
-    music,
+    ...(values.demo ? await demoProject(assets, music) : await generateProject(topic, assets)),
+    ...(music && {music}),
   });
   await writeFile(join(directory, 'project.json'), JSON.stringify(project, null, 2) + '\n');
   const seconds = project.scenes.reduce((sum, scene) => sum + scene.frames, 0) / FPS;

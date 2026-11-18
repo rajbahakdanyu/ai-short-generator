@@ -1,11 +1,11 @@
 import {createReadStream} from 'node:fs';
-import {rm, writeFile} from 'node:fs/promises';
+import {writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import OpenAI from 'openai';
 import {zodTextFormat} from 'openai/helpers/zod';
 import {z} from 'zod';
-import {FPS, groupWords, type Project} from './project.ts';
-import {run, toWav, audioFrames} from './media.ts';
+import {groupWords, type Project} from './project.ts';
+import {audioFrames} from './media.ts';
 
 const storyboardSchema = z.object({
   title: z.string().min(1),
@@ -23,10 +23,12 @@ export async function generateProject(topic: string, assets: string): Promise<Pr
     instructions: [
       'Write an English educational short for a general audience.',
       'Return exactly eight scenes and aim for 95 to 105 spoken words total for a roughly 45-second video.',
-      'Hook the viewer immediately, explain one idea clearly, and end with a memorable payoff.',
+      'Open with a concrete surprise or question in the first sentence. Skip intros and calls to subscribe.',
+      'Each scene should add a new piece of the explanation. End by resolving the opening hook.',
       'Use accurate established facts and qualify uncertainty. Do not invent statistics or citations.',
       'Write natural spoken narration without markup, production notes, or headings.',
-      'Give each scene a distinct, self-contained image prompt with a consistent visual motif and palette.',
+      'Give each scene a distinct, self-contained image prompt that depicts its specific narration beat.',
+      'Keep the visual palette consistent and vary shot scale, composition, and angle across scenes.',
     ].join(' '),
     input: topic,
     text: {format: zodTextFormat(storyboardSchema, 'storyboard')},
@@ -80,29 +82,4 @@ export async function generateProject(topic: string, assets: string): Promise<Pr
     scenes.push({...scene, image, audio, captions, frames: await audioFrames(audioPath)});
   }
   return {title: board.title, scenes};
-}
-
-export async function demoProject(assets: string): Promise<Project> {
-  const lines = [
-    'What would you see if you looked directly at a black hole?',
-    'The black hole itself is dark. Light cannot escape once it crosses the event horizon.',
-    'Some black holes shine indirectly. Hot gas outside the horizon can glow as it spirals inward.',
-  ];
-  const scenes: Project['scenes'] = [];
-  for (const [index, narration] of lines.entries()) {
-    const audio = `scene-${index + 1}.wav`;
-    const aiff = join(assets, `scene-${index + 1}.aiff`);
-    const wav = join(assets, audio);
-    await run('say', ['-o', aiff, narration]);
-    await toWav(aiff, wav);
-    await rm(aiff);
-    const frames = await audioFrames(wav);
-    const words = narration.split(' ');
-    const step = (frames - 3) / (FPS * words.length);
-    const captions = groupWords(words.map((word, i) => ({
-      word, start: i * step, end: (i + 1) * step,
-    })));
-    scenes.push({narration, audio, frames, captions, imagePrompt: 'Abstract black hole illustration'});
-  }
-  return {title: 'Why black holes can look bright', scenes};
 }
