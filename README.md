@@ -25,13 +25,17 @@ Biome uses its recommended rules and enforces React hook checks, type-only impor
 pnpm studio
 ```
 
-Open [Short Studio](http://127.0.0.1:5173/). The bundled black-hole project opens on first launch. Use **Project** to start a blank draft, paste a script with one scene per paragraph, or reload the sample.
+Open [Short Studio](http://127.0.0.1:5173/). The bundled black-hole project opens on first launch. Use **Project** to start a blank draft, paste a script with one scene per paragraph, open a project folder, generate from a topic, or reload the sample.
 
 - Add, rename, reorder, or delete scenes. Drop a still image or MP4 into each scene's **Visual** field.
 - Use **Generate voice** to hear the scene locally and edit caption text and timing in **Captions**. Install Kokoro with `pnpm setup:voice` if it is missing. The bundled sample can preview and export without installing Kokoro.
 - Use **Export MP4** to render and download the video. The saved project and MP4 live under `output/studio-*/`. An optional soundtrack is mixed during export.
 
-The editor saves one draft plus imported media in the browser on this device. The server listens on loopback. The Studio uses the local generation pipeline. Paid generation remains available through the CLI below.
+**Project → Open project folder** opens a folder containing `storyboard.json` or a prepared `project.json` and `assets/`. For a prepared project, Studio reuses the narration, captions, and scene lengths when exporting. For a storyboard, put the referenced stills and clips inside the selected folder.
+
+**Project → Generate from topic** offers storyboard-only, prepare-for-editing, and full MP4 export. Pick the provider and model separately for each stage, or use the values in `.env`. Add any API keys and custom endpoint URLs to `.env` on disk. Keys stay on the local server. Restart Studio after changing `.env`. Generated projects can be opened in the editor from the result dialog or imported later from `output/studio-*/`.
+
+The editor saves one draft plus imported media in the browser on this device. The server listens on loopback. Importing, previewing, and exporting an existing project make no paid API calls.
 
 For a production frontend build, run `pnpm build` followed by `pnpm studio:preview`.
 
@@ -73,7 +77,7 @@ Narration sets the scene length. Clips are cropped to fill the vertical frame an
 
 Append `--music /path/to/track.mp3` to mix a local track under the narration. The final export is a 1080 × 1920, 30 fps H.264 MP4 with AAC audio.
 
-Each run prints a unique directory under `output/` containing the source storyboard, `project.json`, the prepared visuals and narration in `assets/`, and `short.mp4`. Caption timing is estimated from each scene's narration length. You can edit captions in `project.json` and rerender without regenerating narration.
+Each run prints a unique directory under `output/` containing the source storyboard, `project.json`, the prepared visuals and narration in `assets/`, and `short.mp4`. Caption timing is estimated from each scene's narration length. Add `--prepare-only` to stop after creating `project.json` and the media files. You can edit captions in `project.json` and rerender without regenerating narration, or open that folder in Studio.
 
 ```sh
 pnpm generate --render output/your-project-directory
@@ -134,7 +138,7 @@ Add `--plan-only` to call only the script provider and write a storyboard with i
 pnpm generate --paid-topic "Why does the Moon look bigger near the horizon?" --plan-only
 ```
 
-Add your own images or MP4 clips to that storyboard and finish with `--storyboard`. The paid route currently generates still illustrations. Captions and rendering run locally in every mode. The local Studio, demo, storyboard, and rerender commands make no paid API calls.
+Add your own images or MP4 clips to that storyboard and finish with `--storyboard` or open the folder in Studio. Add `--prepare-only` to the full paid command to generate images and narration and stop before rendering. The paid route currently generates still illustrations. Captions and rendering run locally in every mode. Studio only calls paid APIs when you submit **Generate from topic**. The demo, storyboard, and rerender commands make no paid API calls.
 
 ### Demo illustration prompts
 

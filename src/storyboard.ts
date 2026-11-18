@@ -7,13 +7,14 @@ import {narrationCaptions, type Project, type Scene} from './project.ts';
 
 const localPath = z.string().trim().min(1);
 const narration = z.string().trim().min(1);
+const imagePrompt = z.string().trim().min(1).optional();
 const storyboardSchema = z.object({
   title: z.string().trim().min(1),
   scenes: z
     .array(
       z.union([
-        z.object({narration, image: localPath, video: z.never().optional()}),
-        z.object({narration, video: localPath, image: z.never().optional()}),
+        z.object({narration, imagePrompt, image: localPath, video: z.never().optional()}),
+        z.object({narration, imagePrompt, video: localPath, image: z.never().optional()}),
       ]),
     )
     .min(1),
@@ -78,7 +79,7 @@ export async function generateNarration(
 export async function buildStoryboard(
   board: Awaited<ReturnType<typeof readStoryboard>>,
   directory: string,
-  prepared: {voice?: string; captions?: Scene['captions']}[] = [],
+  prepared: {voice?: string; captions?: Scene['captions']; frames?: number}[] = [],
 ): Promise<Project> {
   const assets = join(directory, 'assets');
   await writeFile(join(directory, 'storyboard.json'), `${JSON.stringify(board, null, 2)}\n`);
@@ -96,16 +97,30 @@ export async function buildStoryboard(
     const output = join(assets, audio);
     const voice = prepared[index]?.voice;
     if (voice) await copyFile(voice, output);
-    const frames = await audioFrames(output);
+    const frames = prepared[index]?.frames ?? (await audioFrames(output));
     const captions = prepared[index]?.captions ?? narrationCaptions(scene.narration, frames);
     if (scene.video !== undefined) {
       const video = `${id}.mp4`;
       await fitVideoToScene(scene.video, join(assets, video), frames);
-      scenes.push({narration: scene.narration, video, audio, frames, captions});
+      scenes.push({
+        narration: scene.narration,
+        imagePrompt: scene.imagePrompt,
+        video,
+        audio,
+        frames,
+        captions,
+      });
     } else {
       const image = `${id}.jpg`;
       await toJpeg(scene.image, join(assets, image));
-      scenes.push({narration: scene.narration, image, audio, frames, captions});
+      scenes.push({
+        narration: scene.narration,
+        imagePrompt: scene.imagePrompt,
+        image,
+        audio,
+        frames,
+        captions,
+      });
     }
   }
   return {title: board.title, scenes};

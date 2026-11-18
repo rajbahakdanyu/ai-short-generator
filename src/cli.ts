@@ -10,10 +10,10 @@ import {renderShort} from './render.ts';
 import {buildStoryboard, readStoryboard} from './storyboard.ts';
 
 const usage = `Usage
-  pnpm generate --storyboard path/to/storyboard.json [--music path/to/track.mp3]
-  pnpm generate --paid-topic "Your topic" [--music path/to/track.mp3]
+  pnpm generate --storyboard path/to/storyboard.json [--music path/to/track.mp3] [--prepare-only]
+  pnpm generate --paid-topic "Your topic" [--music path/to/track.mp3] [--prepare-only]
   pnpm generate --paid-topic "Your topic" --plan-only
-  pnpm generate --demo [--music path/to/track.mp3]
+  pnpm generate --demo [--music path/to/track.mp3] [--prepare-only]
   pnpm generate --render output/your-project
 `;
 
@@ -24,6 +24,7 @@ async function main() {
       storyboard: {type: 'string'},
       'paid-topic': {type: 'string'},
       'plan-only': {type: 'boolean'},
+      'prepare-only': {type: 'boolean'},
       render: {type: 'string'},
       music: {type: 'string'},
       help: {type: 'boolean', short: 'h'},
@@ -40,6 +41,7 @@ async function main() {
   if (
     modes.length !== 1 ||
     (planOnly && !topic) ||
+    (values['prepare-only'] && (planOnly || values.render)) ||
     ((values.render || planOnly) && values.music !== undefined)
   ) {
     throw new Error(usage);
@@ -86,6 +88,10 @@ async function main() {
   await writeFile(join(directory, 'project.json'), `${JSON.stringify(project, null, 2)}\n`);
   const seconds = project.scenes.reduce((sum, scene) => sum + scene.frames, 0) / FPS;
   console.log(`${project.title} · ${seconds.toFixed(1)} seconds`);
+  if (values['prepare-only']) {
+    console.log(`Project ready at ${join(directory, 'project.json')}`);
+    return;
+  }
   console.log(await renderShort(directory));
 }
 

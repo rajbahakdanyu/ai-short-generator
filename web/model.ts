@@ -9,6 +9,8 @@ export type DraftScene = {
   media?: Asset;
   voice?: Asset;
   seconds?: number;
+  frames?: number;
+  imagePrompt?: string;
   captions?: Scene['captions'];
 };
 export type Draft = {title: string; scenes: DraftScene[]; music?: Asset};
@@ -17,6 +19,8 @@ export type Job = {
   progress: number;
   error?: string;
   id?: string;
+  hasDraft?: boolean;
+  hasVideo?: boolean;
 };
 
 const sampleFiles = import.meta.glob(

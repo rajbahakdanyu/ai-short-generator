@@ -27,6 +27,7 @@ import {
   Clapperboard,
   ClipboardPaste,
   Film,
+  FolderOpen,
   Image as ImageIcon,
   Info,
   Layers,
@@ -36,11 +37,12 @@ import {
   Music2,
   Plus,
   RotateCcw,
+  Sparkles,
   Trash2,
   Upload,
   X,
 } from 'lucide-react';
-import {useEffect, useRef, useState} from 'react';
+import {lazy, Suspense, useEffect, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {
   type Asset,
@@ -55,9 +57,12 @@ import {
   sampleDraft,
   secondsFor,
 } from './model.ts';
+import type {PaidInput} from './paid-dialog.tsx';
 import {Preview, Thumbnail} from './preview.tsx';
 
+const PaidDialog = lazy(async () => ({default: (await import('./paid-dialog.tsx')).PaidDialog}));
 const key = 'short-studio-draft';
+const lastJobKey = 'short-studio-last-job';
 const theme = createTheme({
   fontFamily: 'Inter Variable, system-ui, sans-serif',
   defaultRadius: 'md',
@@ -109,9 +114,19 @@ function Studio() {
   const [saveError, setSaveError] = useState(false);
   const [error, setError] = useState('');
   const [voiceScene, setVoiceScene] = useState<string>();
-  const [dialog, setDialog] = useState<'script' | 'new' | 'sample' | 'export'>();
+  const [dialog, setDialog] = useState<'script' | 'new' | 'sample' | 'export' | 'paid' | 'import'>();
   const [script, setScript] = useState('');
-  const [job, setJob] = useState<Job>();
+  const [job, setJob] = useState<Job | undefined>(() => {
+    try {
+      const id = sessionStorage.getItem(lastJobKey);
+      if (id) return {id, phase: 'Preparing scenes', progress: 0};
+    } catch {
+      // The editor still works if browser storage is unavailable.
+    }
+  });
+  const [incoming, setIncoming] = useState<Draft>();
+  const [opening, setOpening] = useState(false);
+  const folderPicker = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const visualPicker = useRef<HTMLInputElement>(null);
   const musicPicker = useRef<HTMLInputElement>(null);
@@ -127,7 +142,8 @@ function Studio() {
   );
   const ready =
     !!draft.title.trim() && !invalidCaptions && draft.scenes.every((s) => s.narration.trim() && s.media);
-  const videoUrl = job?.id && job.phase === 'Complete' ? `/api/studio/jobs/${job.id}/video` : undefined;
+  const videoUrl =
+    job?.id && job.hasVideo && job.phase === 'Complete' ? `/api/studio/jobs/${job.id}/video` : undefined;
 
   useEffect(() => {
     let active = true;
@@ -158,6 +174,15 @@ function Studio() {
     }, 250);
     return () => clearTimeout(save);
   }, [draft, hydrated]);
+
+  useEffect(() => {
+    if (!job?.id) return;
+    try {
+      sessionStorage.setItem(lastJobKey, job.id);
+    } catch {
+      // Export files are still stored on disk.
+    }
+  }, [job?.id]);
 
   const pollId = job?.id;
   useEffect(() => {
@@ -255,7 +280,7 @@ function Studio() {
       setDraft((current) => ({
         ...current,
         scenes: current.scenes.map((s) =>
-          s.id === id && s.narration === narration ? {...s, voice, seconds} : s,
+          s.id === id && s.narration === narration ? {...s, voice, seconds, frames: undefined} : s,
         ),
       }));
     } catch (issue) {
@@ -279,6 +304,8 @@ function Studio() {
             narration: scene.narration,
             kind: scene.media?.kind,
             captions: scene.captions,
+            frames: scene.frames,
+            imagePrompt: scene.imagePrompt,
           })),
         }),
       );
@@ -297,7 +324,60 @@ function Studio() {
     }
   }
 
+  async function startPaid(input: PaidInput, track?: File) {
+    if (running || voiceScene) return;
+    setJob({phase: 'Preparing scenes', progress: 0});
+    setDialog('export');
+    try {
+      const headers: Record<string, string> = {'X-Short-Studio': '1'};
+      let body: FormData | string;
+      if (track) {
+        body = new FormData();
+        body.set('request', JSON.stringify(input));
+        body.set('music', track);
+      } else {
+        body = JSON.stringify(input);
+        headers['Content-Type'] = 'application/json';
+      }
+      const {id} = await (await api('paid', {method: 'POST', headers, body})).json();
+      setJob({id, phase: 'Preparing scenes', progress: 0});
+    } catch (issue) {
+      setJob({phase: 'Failed', progress: 0, error: issue instanceof Error ? issue.message : String(issue)});
+    }
+  }
+
+  async function openFolder(files: File[]) {
+    if (!files.length) return;
+    setOpening(true);
+    setError('');
+    try {
+      const {importFolder} = await import('./project-import.ts');
+      setIncoming(await importFolder(files));
+      setDialog('import');
+    } catch (issue) {
+      setError(issue instanceof Error ? issue.message : String(issue));
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  async function openGenerated(id: string) {
+    setOpening(true);
+    setError('');
+    try {
+      const {importJob} = await import('./project-import.ts');
+      setIncoming(await importJob(id));
+      setDialog('import');
+    } catch (issue) {
+      setError(issue instanceof Error ? issue.message : String(issue));
+      setDialog(undefined);
+    } finally {
+      setOpening(false);
+    }
+  }
+
   function replaceDraft(next: Draft) {
+    setIncoming(undefined);
     setDraft(next);
     setSelectedId(next.scenes[0].id);
     setError('');
@@ -326,6 +406,20 @@ function Studio() {
             <Menu.Dropdown>
               <Menu.Item leftSection={<Plus size={15} />} onClick={() => setDialog('new')}>
                 New project
+              </Menu.Item>
+              <Menu.Item
+                disabled={opening}
+                leftSection={<FolderOpen size={15} />}
+                onClick={() => folderPicker.current?.click()}
+              >
+                Open project folder
+              </Menu.Item>
+              <Menu.Item
+                disabled={running || !!voiceScene}
+                leftSection={<Sparkles size={15} />}
+                onClick={() => setDialog('paid')}
+              >
+                Generate from topic
               </Menu.Item>
               <Menu.Item leftSection={<ClipboardPaste size={15} />} onClick={() => setDialog('script')}>
                 Paste script
@@ -358,6 +452,18 @@ function Studio() {
         </div>
       </header>
 
+      <input
+        type="file"
+        ref={folderPicker}
+        hidden
+        {...{webkitdirectory: ''}}
+        multiple
+        aria-label="Project folder"
+        onChange={(event) => {
+          void openFolder(Array.from(event.currentTarget.files ?? []));
+          event.currentTarget.value = '';
+        }}
+      />
       <main>
         <div className="project-header">
           <div className="project-title">
@@ -595,6 +701,16 @@ function Studio() {
                   }}
                 />
               </div>
+              {scene.imagePrompt && (
+                <Textarea
+                  label="Illustration prompt"
+                  readOnly
+                  value={scene.imagePrompt}
+                  minRows={2}
+                  maxRows={5}
+                  autosize
+                />
+              )}
               <div className="field-block narration">
                 <Textarea
                   label={
@@ -613,6 +729,7 @@ function Studio() {
                       narration: event.currentTarget.value,
                       voice: undefined,
                       seconds: undefined,
+                      frames: undefined,
                       captions: undefined,
                     })
                   }
@@ -693,6 +810,40 @@ function Studio() {
         </div>
       </main>
 
+      {dialog === 'paid' && (
+        <Suspense fallback={null}>
+          <PaidDialog
+            opened
+            close={() => setDialog(undefined)}
+            submit={(input, track) => void startPaid(input, track)}
+          />
+        </Suspense>
+      )}
+      <Modal
+        opened={dialog === 'import'}
+        onClose={() => {
+          setIncoming(undefined);
+          setDialog(undefined);
+        }}
+        title="Open project"
+        centered
+      >
+        {incoming && (
+          <>
+            <strong>{incoming.title}</strong>
+            <p className="modal-note">
+              {incoming.scenes.length} {incoming.scenes.length === 1 ? 'scene' : 'scenes'}. This replaces the
+              draft saved in this browser.
+            </p>
+            {incoming.scenes.some((scene) => !scene.media) && (
+              <p className="modal-note">Attach visuals to the empty scenes before exporting.</p>
+            )}
+            <Button className="primary" onClick={() => replaceDraft(incoming)}>
+              Open in editor
+            </Button>
+          </>
+        )}
+      </Modal>
       <Modal
         opened={dialog === 'script'}
         onClose={() => setDialog(undefined)}
@@ -729,7 +880,12 @@ function Studio() {
           {dialog === 'new' ? 'New project' : 'Load sample'}
         </Button>
       </Modal>
-      <Modal opened={dialog === 'export'} onClose={() => setDialog(undefined)} title="Export video" centered>
+      <Modal
+        opened={dialog === 'export'}
+        onClose={() => setDialog(undefined)}
+        title="Generation and export"
+        centered
+      >
         <div aria-live="polite" className="export-status">
           <strong>{job?.phase}</strong>
           {running && (
@@ -744,6 +900,18 @@ function Studio() {
             <Alert color="red" icon={<Info size={16} />}>
               {job.error}
             </Alert>
+          )}
+          {!running && job?.id && job.hasDraft && (
+            <Button
+              variant="default"
+              loading={opening}
+              leftSection={<FolderOpen size={16} />}
+              onClick={() => {
+                if (job.id) void openGenerated(job.id);
+              }}
+            >
+              Review generated project
+            </Button>
           )}
           {videoUrl && (
             <>

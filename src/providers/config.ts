@@ -1,4 +1,5 @@
 import {loadEnvFile} from 'node:process';
+import {imageProviders, type PaidSelection, scriptProviders, voiceProviders} from './catalog.ts';
 
 export const setting = (name: string) => process.env[name]?.trim() || undefined;
 
@@ -29,47 +30,6 @@ const providers = {
 type Provider = keyof typeof providers;
 type Stage = 'SCRIPT' | 'IMAGE' | 'VOICE';
 
-const scriptProviders = [
-  'openai',
-  'compatible',
-  'openrouter',
-  'anthropic',
-  'google',
-  'xai',
-  'azure',
-  'bedrock',
-  'mistral',
-  'groq',
-  'deepseek',
-  'together',
-  'fireworks',
-  'perplexity',
-  'deepinfra',
-  'cerebras',
-  'cohere',
-  'gateway',
-] as const;
-const imageProviders = [
-  'openai',
-  'compatible',
-  'openrouter',
-  'google',
-  'xai',
-  'azure',
-  'together',
-  'fal',
-  'replicate',
-] as const;
-const voiceProviders = [
-  'openai',
-  'compatible',
-  'openrouter',
-  'google',
-  'xai',
-  'azure',
-  'elevenlabs',
-] as const;
-
 const openAiDefaults = {SCRIPT: 'gpt-4.1-mini', IMAGE: 'gpt-image-1-mini', VOICE: 'gpt-4o-mini-tts'};
 
 function required(name: string, value = setting(name)) {
@@ -77,8 +37,8 @@ function required(name: string, value = setting(name)) {
   return value;
 }
 
-function endpointFor(provider: Provider, stage: Stage) {
-  const override = setting(`${stage}_BASE_URL`);
+function endpointFor(provider: Provider, stageUrl?: string) {
+  const override = stageUrl;
   if (override) return override;
   if (provider === 'openai' || provider === 'compatible') {
     return setting('OPENAI_BASE_URL') ?? providers[provider][1];
@@ -94,7 +54,14 @@ function endpointFor(provider: Provider, stage: Stage) {
   return providers[provider][1];
 }
 
-function stageConfig<P extends Provider>(stage: Stage, allowed: readonly P[], selected: string) {
+function stageConfig<P extends Provider>(
+  stage: Stage,
+  allowed: readonly P[],
+  selection?: {provider?: string; model?: string},
+) {
+  const configured = setting(`${stage}_PROVIDER`) ?? setting('PAID_PROVIDER') ?? 'openai';
+  const selected = selection?.provider ?? configured;
+  const sameProvider = selected === configured;
   const provider = allowed.find((candidate) => candidate === selected);
   if (!provider) {
     throw new Error(
@@ -102,7 +69,12 @@ function stageConfig<P extends Provider>(stage: Stage, allowed: readonly P[], se
     );
   }
 
-  const endpoint = new URL(required(`${stage}_BASE_URL`, endpointFor(provider, stage)));
+  const endpoint = new URL(
+    required(
+      `${stage}_BASE_URL`,
+      endpointFor(provider, sameProvider ? setting(`${stage}_BASE_URL`) : undefined),
+    ),
+  );
   if (
     !['http:', 'https:'].includes(endpoint.protocol) ||
     endpoint.username ||
@@ -118,7 +90,7 @@ function stageConfig<P extends Provider>(stage: Stage, allowed: readonly P[], se
   const [keyName] = providers[provider];
   const apiKey = required(
     keyName,
-    setting(`${stage}_API_KEY`) ??
+    (sameProvider ? setting(`${stage}_API_KEY`) : undefined) ??
       setting(keyName) ??
       (provider === 'google' ? setting('GEMINI_API_KEY') : undefined),
   );
@@ -128,33 +100,40 @@ function stageConfig<P extends Provider>(stage: Stage, allowed: readonly P[], se
       ? 'tts'
       : required(
           `${stage}_MODEL`,
-          setting(`${stage}_MODEL`) ?? (officialOpenAi ? openAiDefaults[stage] : undefined),
+          selection?.model ??
+            (sameProvider ? setting(`${stage}_MODEL`) : undefined) ??
+            (officialOpenAi ? openAiDefaults[stage] : undefined),
         );
   return {provider, endpoint: endpoint.href.replace(/\/$/, ''), apiKey, model, officialOpenAi};
 }
 
-function voiceConfig(selected: string) {
-  if (selected === 'kokoro') return {provider: 'kokoro'} as const;
-  const config = stageConfig('VOICE', voiceProviders, selected);
+function voiceConfig(selection?: PaidSelection['voice']) {
+  const configured = setting('VOICE_PROVIDER') ?? setting('PAID_PROVIDER') ?? 'openai';
+  if ((selection?.provider ?? configured) === 'kokoro') return {provider: 'kokoro'} as const;
+  const config = stageConfig('VOICE', voiceProviders, selection);
   return {
     ...config,
-    voice: required('VOICE', setting('VOICE') ?? (config.officialOpenAi ? 'onyx' : undefined)),
+    voice: required(
+      'VOICE',
+      selection?.voice ??
+        (config.provider === configured ? setting('VOICE') : undefined) ??
+        (config.officialOpenAi ? 'onyx' : undefined),
+    ),
   };
 }
 
-export function paidProviders(planOnly: boolean) {
+export function paidProviders(planOnly: boolean, selection?: PaidSelection) {
   try {
     loadEnvFile();
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
-  const common = setting('PAID_PROVIDER') ?? 'openai';
-  const script = stageConfig('SCRIPT', scriptProviders, setting('SCRIPT_PROVIDER') ?? common);
+  const script = stageConfig('SCRIPT', scriptProviders, selection?.script);
   if (planOnly) return {script};
   return {
     script,
-    image: stageConfig('IMAGE', imageProviders, setting('IMAGE_PROVIDER') ?? common),
-    voice: voiceConfig(setting('VOICE_PROVIDER') ?? common),
+    image: stageConfig('IMAGE', imageProviders, selection?.image),
+    voice: voiceConfig(selection?.voice),
   };
 }
 
