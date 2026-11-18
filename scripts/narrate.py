@@ -15,7 +15,8 @@ def main():
         str(model_dir / "kokoro-v1.0.onnx"), str(model_dir / "voices-v1.0.bin")
     )
     scenes = json.loads(storyboard.read_text(encoding="utf-8"))["scenes"]
-    for index, scene in enumerate(scenes, 1):
+    for scene in scenes:
+        index = scene["index"]
         samples, sample_rate = model.create(
             scene["narration"], voice="af_heart", speed=1.03, lang="en-us"
         )

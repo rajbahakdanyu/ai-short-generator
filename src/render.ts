@@ -6,7 +6,7 @@ import {bundle} from '@remotion/bundler';
 import {renderMedia, selectComposition} from '@remotion/renderer';
 import {projectSchema} from './project.ts';
 
-export async function renderShort(directory: string) {
+export async function renderShort(directory: string, reportProgress?: (progress: number) => void) {
   const inputProps = projectSchema.parse(JSON.parse(await readFile(join(directory, 'project.json'), 'utf8')));
   const serveUrl = await bundle({
     entryPoint: fileURLToPath(new URL('./video.tsx', import.meta.url)),
@@ -28,6 +28,7 @@ export async function renderShort(directory: string) {
       outputLocation: temporaryOutput,
       concurrency: 3,
       onProgress: ({progress}) => {
+        reportProgress?.(progress);
         const milestone = Math.floor(progress * 4);
         if (milestone > lastProgress) {
           console.log(`Rendering ${milestone * 25}%`);

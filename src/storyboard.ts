@@ -1,9 +1,9 @@
-import {access, readFile, rm, writeFile} from 'node:fs/promises';
+import {access, copyFile, readFile, rm, writeFile} from 'node:fs/promises';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {z} from 'zod';
 import {audioFrames, fitVideoToScene, normalizeSpeech, run, toJpeg} from './media.ts';
-import {narrationCaptions, type Project} from './project.ts';
+import {narrationCaptions, type Project, type Scene} from './project.ts';
 
 const localPath = z.string().trim().min(1);
 const narration = z.string().trim().min(1);
@@ -31,10 +31,12 @@ export async function readStoryboard(path: string) {
   return {...board, scenes};
 }
 
-export async function buildStoryboard(
-  board: Awaited<ReturnType<typeof readStoryboard>>,
+export async function generateNarration(
+  scenes: {index: number; narration: string}[],
   directory: string,
-): Promise<Project> {
+  assets: string,
+) {
+  if (!scenes.length) return;
   const root = fileURLToPath(new URL('../', import.meta.url));
   const python = join(root, '.kokoro/venv/bin/python');
   try {
@@ -47,21 +49,39 @@ export async function buildStoryboard(
     throw new Error('Kokoro is missing. Run pnpm setup:voice from the project directory.');
   }
 
-  const input = join(directory, 'storyboard.json');
+  const input = join(directory, 'narration-input.json');
+  await writeFile(input, JSON.stringify({scenes}));
+  try {
+    console.log('Generating narration locally with Kokoro');
+    await run(python, [join(root, 'scripts/narrate.py'), input, assets]);
+    for (const {index} of scenes) {
+      const speech = join(assets, `speech-${index}.wav`);
+      await normalizeSpeech(speech, join(assets, `scene-${index}.wav`));
+      await rm(speech);
+    }
+  } finally {
+    await rm(input, {force: true});
+  }
+}
+
+export async function buildStoryboard(
+  board: Awaited<ReturnType<typeof readStoryboard>>,
+  directory: string,
+  prepared: {voice?: string; captions?: Scene['captions']}[] = [],
+): Promise<Project> {
   const assets = join(directory, 'assets');
-  await writeFile(input, JSON.stringify(board, null, 2) + '\n');
-  console.log('Generating narration locally with Kokoro');
-  await run(python, [join(root, 'scripts/narrate.py'), input, assets]);
+  await writeFile(join(directory, 'storyboard.json'), JSON.stringify(board, null, 2) + '\n');
+  await generateNarration(board.scenes.flatMap(({narration}, index) =>
+    prepared[index]?.voice ? [] : [{narration, index: index + 1}]), directory, assets);
   const scenes: Project['scenes'] = [];
   for (const [index, scene] of board.scenes.entries()) {
     const id = `scene-${index + 1}`;
-    const audio = `scene-${index + 1}.wav`;
-    const speech = join(assets, `speech-${index + 1}.wav`);
+    const audio = `${id}.wav`;
     const output = join(assets, audio);
-    await normalizeSpeech(speech, output);
-    await rm(speech);
+    const voice = prepared[index]?.voice;
+    if (voice) await copyFile(voice, output);
     const frames = await audioFrames(output);
-    const captions = narrationCaptions(scene.narration, frames);
+    const captions = prepared[index]?.captions ?? narrationCaptions(scene.narration, frames);
     if (scene.video !== undefined) {
       const video = `${id}.mp4`;
       await fitVideoToScene(scene.video, join(assets, video), frames);
