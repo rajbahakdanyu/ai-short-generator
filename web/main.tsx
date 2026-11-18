@@ -12,6 +12,7 @@ import {
   Modal,
   NumberInput,
   Progress,
+  Select,
   Textarea,
   TextInput,
   Tooltip,
@@ -44,6 +45,7 @@ import {
 } from 'lucide-react';
 import {lazy, Suspense, useEffect, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
+import {defaultKokoroVoice, isKokoroVoice, kokoroVoices} from '../src/kokoro-voices.ts';
 import {
   type Asset,
   api,
@@ -62,6 +64,7 @@ import {Preview, Thumbnail} from './preview.tsx';
 
 const PaidDialog = lazy(async () => ({default: (await import('./paid-dialog.tsx')).PaidDialog}));
 const key = 'short-studio-draft';
+const voiceOptions = Object.entries(kokoroVoices).map(([value, label]) => ({value, label}));
 const lastJobKey = 'short-studio-last-job';
 const theme = createTheme({
   fontFamily: 'Inter Variable, system-ui, sans-serif',
@@ -260,13 +263,14 @@ function Studio() {
 
   async function generateVoice() {
     const {id, narration} = scene;
+    const kokoroVoice = scene.kokoroVoice ?? defaultKokoroVoice;
     setVoiceScene(id);
     setError('');
     try {
       const response = await api('voice', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-Short-Studio': '1'},
-        body: JSON.stringify({narration}),
+        body: JSON.stringify({narration, kokoroVoice}),
       });
       const source = await response.blob();
       const context = new AudioContext();
@@ -276,11 +280,13 @@ function Studio() {
       } finally {
         await context.close();
       }
-      const voice: Asset = {name: 'Kokoro · Heart', kind: 'audio', source};
+      const voice: Asset = {name: kokoroVoices[kokoroVoice], kind: 'audio', source};
       setDraft((current) => ({
         ...current,
         scenes: current.scenes.map((s) =>
-          s.id === id && s.narration === narration ? {...s, voice, seconds, frames: undefined} : s,
+          s.id === id && s.narration === narration && (s.kokoroVoice ?? defaultKokoroVoice) === kokoroVoice
+            ? {...s, voice, seconds, frames: undefined, kokoroVoice}
+            : s,
         ),
       }));
     } catch (issue) {
@@ -302,6 +308,7 @@ function Studio() {
           title: draft.title,
           scenes: draft.scenes.map((scene) => ({
             narration: scene.narration,
+            kokoroVoice: scene.kokoroVoice,
             kind: scene.media?.kind,
             captions: scene.captions,
             frames: scene.frames,
@@ -734,6 +741,28 @@ function Studio() {
                     })
                   }
                 />
+                <Select
+                  mt="xs"
+                  label="Local voice"
+                  data={voiceOptions}
+                  value={scene.kokoroVoice ?? defaultKokoroVoice}
+                  allowDeselect={false}
+                  onChange={(voice) => {
+                    if (
+                      !voice ||
+                      !isKokoroVoice(voice) ||
+                      voice === (scene.kokoroVoice ?? defaultKokoroVoice)
+                    )
+                      return;
+                    patchScene(scene.id, {
+                      kokoroVoice: voice,
+                      voice: undefined,
+                      seconds: undefined,
+                      frames: undefined,
+                      captions: undefined,
+                    });
+                  }}
+                />
                 <div className="narration-actions">
                   <span>
                     {scene.voice ? (
@@ -741,7 +770,7 @@ function Studio() {
                         <Check size={13} /> Voice ready
                       </>
                     ) : (
-                      'Kokoro · Heart'
+                      'Voice pending'
                     )}
                   </span>
                   <Button

@@ -1,6 +1,7 @@
 import {Button, FileInput, Group, Modal, Select, Stack, Text, TextInput} from '@mantine/core';
 import {Sparkles} from 'lucide-react';
 import {useState} from 'react';
+import {defaultKokoroVoice, kokoroVoices} from '../src/kokoro-voices.ts';
 import {
   imageProviders,
   type PaidSelection,
@@ -110,6 +111,20 @@ export function PaidDialog({
                           [stage]: {...previous[stage], model: value},
                         }));
                       }}
+                    />
+                  )}
+                  {stage === 'voice' && selection.voice?.provider === 'kokoro' && (
+                    <Select
+                      label="Kokoro voice"
+                      data={Object.entries(kokoroVoices).map(([value, label]) => ({value, label}))}
+                      value={selection.voice.voice ?? defaultKokoroVoice}
+                      allowDeselect={false}
+                      onChange={(voice) =>
+                        setSelection((previous) => ({
+                          ...previous,
+                          voice: {...previous.voice, voice: voice ?? undefined},
+                        }))
+                      }
                     />
                   )}
                   {stage === 'voice' && selection.voice?.provider !== 'kokoro' && (

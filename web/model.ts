@@ -1,3 +1,4 @@
+import type {KokoroVoice} from '../src/kokoro-voices.ts';
 import type {Scene} from '../src/project.ts';
 import {estimatedCaptions, FPS, narrationCaptions} from '../src/timing.ts';
 
@@ -8,6 +9,7 @@ export type DraftScene = {
   narration: string;
   media?: Asset;
   voice?: Asset;
+  kokoroVoice?: KokoroVoice;
   seconds?: number;
   frames?: number;
   imagePrompt?: string;

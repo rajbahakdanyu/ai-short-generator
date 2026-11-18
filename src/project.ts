@@ -1,6 +1,9 @@
 import {z} from 'zod';
+import {kokoroVoices} from './kokoro-voices.ts';
 
 export {estimatedCaptions, FPS, narrationCaptions} from './timing.ts';
+export const kokoroVoiceSchema = z.enum(Object.keys(kokoroVoices) as (keyof typeof kokoroVoices)[]);
+
 export const captionSchema = z
   .object({
     text: z.string().min(1),
@@ -15,6 +18,7 @@ export const projectSchema = z.object({
     .array(
       z.object({
         narration: z.string().min(1),
+        kokoroVoice: kokoroVoiceSchema.optional(),
         imagePrompt: z.string().min(1).optional(),
         image: z
           .string()

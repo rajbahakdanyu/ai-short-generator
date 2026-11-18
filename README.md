@@ -28,7 +28,7 @@ pnpm studio
 Open [Short Studio](http://127.0.0.1:5173/). The bundled black-hole project opens on first launch. Use **Project** to start a blank draft, paste a script with one scene per paragraph, open a project folder, generate from a topic, or reload the sample.
 
 - Add, rename, reorder, or delete scenes. Drop a still image or MP4 into each scene's **Visual** field.
-- Use **Generate voice** to hear the scene locally and edit caption text and timing in **Captions**. Install Kokoro with `pnpm setup:voice` if it is missing. The bundled sample can preview and export without installing Kokoro.
+- Pick a **Local voice** for each scene, then use **Generate voice** and **Play** to audition it. Heart is the default. Changing voices resets the recording and caption timing for that scene. Edit caption text and timing in **Captions** after generating the new recording. Install Kokoro with `pnpm setup:voice` if it is missing. The bundled sample can preview and export without installing Kokoro.
 - Select **Full Short** in the preview to play and scrub across scenes, or **Scene** to focus on the selected shot. The preview plays available narration and the optional soundtrack.
 - Use **Export MP4** to render and download the video. The saved project and MP4 live under `output/studio-*/`. An optional soundtrack is mixed during export.
 
@@ -85,6 +85,16 @@ pnpm generate --render output/your-project-directory
 pnpm check
 ```
 
+### Local narration voices
+
+The existing Kokoro download includes Heart (`af_heart`), Bella (`af_bella`), Michael (`am_michael`), Fenrir (`am_fenrir`), Emma (`bf_emma`), and George (`bm_george`). Heart remains the default. Emma and George speak British English. The others use American English.
+
+Set `"kokoroVoice": "bf_emma"` on individual scenes in `storyboard.json`, or override the voice for the whole run:
+
+```sh
+pnpm generate --storyboard path/to/storyboard.json --kokoro-voice bf_emma
+```
+
 ## Generate from a topic with paid providers
 
 Copy `.env.example` to `.env`. Set `PAID_PROVIDER` to use a single provider for all three stages, or use `SCRIPT_PROVIDER`, `IMAGE_PROVIDER`, and `VOICE_PROVIDER` to mix providers. Stage settings take precedence. With no provider settings, the CLI uses the existing OpenAI defaults and `OPENAI_API_KEY`.
@@ -129,7 +139,7 @@ pnpm generate --paid-topic "Why does the Moon look bigger near the horizon?"
 | `kokoro`                                                                                    | Voice                | Local model installed with `pnpm setup:voice`                                                                                                               |
 | `compatible`                                                                                | Script, image, voice | An OpenAI-compatible API URL and key for the endpoints you use                                                                                              |
 
-Set `SCRIPT_MODEL`, `IMAGE_MODEL`, and `VOICE_MODEL` to models that support each stage. Set `VOICE` to the provider's voice name or ID for remote narration. Kokoro uses the bundled setup's Heart voice. The same OpenRouter or Google API key can cover multiple stages, with a different model for each.
+Set `SCRIPT_MODEL`, `IMAGE_MODEL`, and `VOICE_MODEL` to models that support each stage. Set `VOICE` to the provider's voice name or ID for remote narration. Kokoro defaults to Heart. In Studio, select **Kokoro (local)** to pick a different voice, or pass `--kokoro-voice ID` in the CLI when `VOICE_PROVIDER=kokoro`. The same OpenRouter or Google API key can cover multiple stages, with a different model for each.
 
 For custom endpoints, use `<STAGE>_BASE_URL` and `<STAGE>_API_KEY`, replacing `<STAGE>` with `SCRIPT`, `IMAGE`, or `VOICE`. Existing `OPENAI_BASE_URL` and `OPENAI_API_KEY` setups still work with the default provider. Image tuning accepts `IMAGE_SIZE` for compatible APIs, `IMAGE_ASPECT_RATIO` where supported, and optional JSON `IMAGE_OPTIONS` for model-specific parameters. OpenRouter speech defaults to MP3. Use `VOICE_FORMAT` for a compatible model's supported format.
 

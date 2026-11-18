@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {projectSchema} from '../src/project.ts';
+import {kokoroVoiceSchema, projectSchema} from '../src/project.ts';
 import {FPS} from '../src/timing.ts';
 import {type Asset, type Draft, freshScene} from './model.ts';
 
@@ -9,6 +9,7 @@ const storyboardSchema = z.object({
     .array(
       z.object({
         narration: z.string().trim().min(1),
+        kokoroVoice: kokoroVoiceSchema.optional(),
         image: z.string().min(1).optional(),
         video: z.string().min(1).optional(),
         imagePrompt: z.string().min(1).optional(),
@@ -32,6 +33,7 @@ async function loadStoryboard(input: unknown, load: LoadAsset): Promise<Draft> {
       scenes.map(async (scene, index) => ({
         ...namedScene(scene.narration, index),
         imagePrompt: scene.imagePrompt,
+        kokoroVoice: scene.kokoroVoice,
         media: await loadVisual(scene, load),
       })),
     ),
@@ -63,6 +65,7 @@ async function loadProject(input: unknown, load: LoadAsset): Promise<Draft> {
         return {
           ...namedScene(scene.narration, index),
           imagePrompt: scene.imagePrompt,
+          kokoroVoice: scene.kokoroVoice,
           media,
           voice,
           frames: scene.frames,

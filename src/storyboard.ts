@@ -2,19 +2,21 @@ import {access, copyFile, readFile, rm, writeFile} from 'node:fs/promises';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {z} from 'zod';
+import {defaultKokoroVoice, type KokoroVoice} from './kokoro-voices.ts';
 import {audioFrames, fitVideoToScene, normalizeSpeech, run, toJpeg} from './media.ts';
-import {narrationCaptions, type Project, type Scene} from './project.ts';
+import {kokoroVoiceSchema, narrationCaptions, type Project, type Scene} from './project.ts';
 
 const localPath = z.string().trim().min(1);
 const narration = z.string().trim().min(1);
 const imagePrompt = z.string().trim().min(1).optional();
+const kokoroVoice = kokoroVoiceSchema.optional();
 const storyboardSchema = z.object({
   title: z.string().trim().min(1),
   scenes: z
     .array(
       z.union([
-        z.object({narration, imagePrompt, image: localPath, video: z.never().optional()}),
-        z.object({narration, imagePrompt, video: localPath, image: z.never().optional()}),
+        z.object({narration, imagePrompt, kokoroVoice, image: localPath, video: z.never().optional()}),
+        z.object({narration, imagePrompt, kokoroVoice, video: localPath, image: z.never().optional()}),
       ]),
     )
     .min(1),
@@ -55,14 +57,19 @@ export async function kokoroRuntime() {
 }
 
 export async function generateNarration(
-  scenes: {index: number; narration: string}[],
+  scenes: {index: number; narration: string; kokoroVoice?: KokoroVoice}[],
   directory: string,
   assets: string,
 ) {
   if (!scenes.length) return;
   const {python, root} = await kokoroRuntime();
   const input = join(directory, 'narration-input.json');
-  await writeFile(input, JSON.stringify({scenes}));
+  await writeFile(
+    input,
+    JSON.stringify({
+      scenes: scenes.map((scene) => ({...scene, kokoroVoice: scene.kokoroVoice ?? defaultKokoroVoice})),
+    }),
+  );
   try {
     console.log('Generating narration locally with Kokoro');
     await run(python, [join(root, 'scripts/narrate.py'), input, assets]);
@@ -84,8 +91,8 @@ export async function buildStoryboard(
   const assets = join(directory, 'assets');
   await writeFile(join(directory, 'storyboard.json'), `${JSON.stringify(board, null, 2)}\n`);
   await generateNarration(
-    board.scenes.flatMap(({narration}, index) =>
-      prepared[index]?.voice ? [] : [{narration, index: index + 1}],
+    board.scenes.flatMap(({narration, kokoroVoice}, index) =>
+      prepared[index]?.voice ? [] : [{narration, kokoroVoice, index: index + 1}],
     ),
     directory,
     assets,
@@ -104,6 +111,7 @@ export async function buildStoryboard(
       await fitVideoToScene(scene.video, join(assets, video), frames);
       scenes.push({
         narration: scene.narration,
+        kokoroVoice: scene.kokoroVoice,
         imagePrompt: scene.imagePrompt,
         video,
         audio,
@@ -115,6 +123,7 @@ export async function buildStoryboard(
       await toJpeg(scene.image, join(assets, image));
       scenes.push({
         narration: scene.narration,
+        kokoroVoice: scene.kokoroVoice,
         imagePrompt: scene.imagePrompt,
         image,
         audio,

@@ -1,4 +1,5 @@
 import {loadEnvFile} from 'node:process';
+import {defaultKokoroVoice, parseKokoroVoice} from '../kokoro-voices.ts';
 import {imageProviders, type PaidSelection, scriptProviders, voiceProviders} from './catalog.ts';
 
 export const setting = (name: string) => process.env[name]?.trim() || undefined;
@@ -109,7 +110,9 @@ function stageConfig<P extends Provider>(
 
 function voiceConfig(selection?: PaidSelection['voice']) {
   const configured = setting('VOICE_PROVIDER') ?? setting('PAID_PROVIDER') ?? 'openai';
-  if ((selection?.provider ?? configured) === 'kokoro') return {provider: 'kokoro'} as const;
+  if ((selection?.provider ?? configured) === 'kokoro') {
+    return {provider: 'kokoro', voice: parseKokoroVoice(selection?.voice ?? defaultKokoroVoice)} as const;
+  }
   const config = stageConfig('VOICE', voiceProviders, selection);
   return {
     ...config,

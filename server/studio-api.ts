@@ -8,7 +8,7 @@ import type {Plugin} from 'vite';
 import {z} from 'zod';
 import {run, toWav} from '../src/media.ts';
 import {buildPaidShort} from '../src/paid.ts';
-import {captionSchema, projectSchema} from '../src/project.ts';
+import {captionSchema, kokoroVoiceSchema, projectSchema} from '../src/project.ts';
 import {paidProviders} from '../src/providers/config.ts';
 import {renderShort} from '../src/render.ts';
 import {buildStoryboard, generateNarration, readStoryboard} from '../src/storyboard.ts';
@@ -20,6 +20,7 @@ const requestSchema = z.object({
     .array(
       z.object({
         narration: z.string().trim().min(1).max(4000),
+        kokoroVoice: kokoroVoiceSchema.optional(),
         kind: z.enum(['image', 'video']),
         captions: z.array(captionSchema).optional(),
         frames: z.number().int().positive().optional(),
@@ -172,7 +173,12 @@ async function queueExport(form: FormData, job: Job, id: string) {
     const visual = uploadPart(form, `visual-${index}`);
     const filename = `input-${index + 1}.${scene.kind === 'video' ? 'mp4' : 'image'}`;
     await writeFile(join(directory, filename), Buffer.from(await visual.arrayBuffer()));
-    source.push({narration: scene.narration, imagePrompt: scene.imagePrompt, [scene.kind]: filename});
+    source.push({
+      narration: scene.narration,
+      imagePrompt: scene.imagePrompt,
+      kokoroVoice: scene.kokoroVoice,
+      [scene.kind]: filename,
+    });
     let voice: string | undefined;
     if (form.has(`voice-${index}`)) {
       const recording = uploadPart(form, `voice-${index}`);
@@ -240,11 +246,14 @@ export function studioApi(): Plugin {
           narrating = true;
           let directory: string | undefined;
           try {
-            const {narration} = z
-              .object({narration: z.string().trim().min(1).max(4000)})
+            const {narration, kokoroVoice} = z
+              .object({
+                narration: z.string().trim().min(1).max(4000),
+                kokoroVoice: kokoroVoiceSchema.optional(),
+              })
               .parse(await readJson(req));
             directory = await mkdtemp(join(tmpdir(), 'short-studio-'));
-            await generateNarration([{index: 1, narration}], directory, directory);
+            await generateNarration([{index: 1, narration, kokoroVoice}], directory, directory);
             const audio = await readFile(join(directory, 'scene-1.wav'));
             res.writeHead(200, {'Content-Type': 'audio/wav', 'Cache-Control': 'no-store'});
             return res.end(audio);

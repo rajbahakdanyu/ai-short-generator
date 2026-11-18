@@ -17,8 +17,10 @@ def main():
     scenes = json.loads(storyboard.read_text(encoding="utf-8"))["scenes"]
     for scene in scenes:
         index = scene["index"]
+        voice = scene["kokoroVoice"]
+        language = "en-gb" if voice.startswith("b") else "en-us"
         samples, sample_rate = model.create(
-            scene["narration"], voice="af_heart", speed=1.03, lang="en-us"
+            scene["narration"], voice=voice, speed=1.03, lang=language
         )
         soundfile.write(assets / f"speech-{index}.wav", samples, sample_rate)
 

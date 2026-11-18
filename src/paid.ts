@@ -80,7 +80,7 @@ export async function buildPaidShort(
 
   if (voice.provider === 'kokoro') {
     await generateNarration(
-      board.scenes.map(({narration}, index) => ({narration, index: index + 1})),
+      board.scenes.map(({narration}, index) => ({narration, kokoroVoice: voice.voice, index: index + 1})),
       directory,
       assets,
     );
@@ -97,7 +97,14 @@ export async function buildPaidShort(
       await rm(temporarySpeech);
     }
     const frames = await audioFrames(join(assets, audio));
-    scenes.push({...scene, image, audio, frames, captions: narrationCaptions(scene.narration, frames)});
+    scenes.push({
+      ...scene,
+      kokoroVoice: voice.provider === 'kokoro' ? voice.voice : undefined,
+      image,
+      audio,
+      frames,
+      captions: narrationCaptions(scene.narration, frames),
+    });
   }
   return {title: board.title, scenes};
 }

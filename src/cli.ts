@@ -2,6 +2,7 @@ import {mkdir, mkdtemp, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 import {parseArgs} from 'node:util';
 import {demoProject} from './demo.ts';
+import {parseKokoroVoice} from './kokoro-voices.ts';
 import {run, toWav} from './media.ts';
 import {buildPaidShort} from './paid.ts';
 import {FPS, projectSchema} from './project.ts';
@@ -15,6 +16,8 @@ const usage = `Usage
   pnpm generate --paid-topic "Your topic" --plan-only
   pnpm generate --demo [--music path/to/track.mp3] [--prepare-only]
   pnpm generate --render output/your-project
+
+--kokoro-voice ID overrides the voice for local storyboard narration or paid mode with VOICE_PROVIDER=kokoro.
 `;
 
 async function main() {
@@ -24,6 +27,7 @@ async function main() {
       storyboard: {type: 'string'},
       'paid-topic': {type: 'string'},
       'plan-only': {type: 'boolean'},
+      'kokoro-voice': {type: 'string'},
       'prepare-only': {type: 'boolean'},
       render: {type: 'string'},
       music: {type: 'string'},
@@ -46,13 +50,23 @@ async function main() {
   ) {
     throw new Error(usage);
   }
+  const voice = values['kokoro-voice'] !== undefined ? parseKokoroVoice(values['kokoro-voice']) : undefined;
+  if (voice && (values.render || values.demo || planOnly))
+    throw new Error('--kokoro-voice requires narration generation.');
   if (values.render) {
     console.log(await renderShort(resolve(values.render)));
     return;
   }
 
-  const board = values.storyboard ? await readStoryboard(resolve(values.storyboard)) : undefined;
-  const provider = topic ? paidProviders(planOnly) : undefined;
+  const source = values.storyboard ? await readStoryboard(resolve(values.storyboard)) : undefined;
+  const board =
+    source && voice
+      ? {...source, scenes: source.scenes.map((scene) => ({...scene, kokoroVoice: voice}))}
+      : source;
+  const provider = topic ? paidProviders(planOnly, voice ? {voice: {voice}} : undefined) : undefined;
+  if (voice && provider && provider.voice?.provider !== 'kokoro') {
+    throw new Error('--kokoro-voice requires VOICE_PROVIDER=kokoro in paid mode.');
+  }
   if (!planOnly) {
     await run('ffprobe', ['-version']);
     await run('ffmpeg', ['-version']);
