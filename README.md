@@ -13,6 +13,22 @@ pnpm install --frozen-lockfile
 
 The first render may download Remotion's headless browser.
 
+## Open Short Studio
+
+```sh
+pnpm studio
+```
+
+Open [Short Studio](http://127.0.0.1:5173/). The bundled black-hole project opens on first launch. Use **Project** to start a blank draft, paste a script with one scene per paragraph, or reload the sample.
+
+- Add, rename, reorder, or delete scenes. Drop a still image or MP4 into each scene's **Visual** field.
+- Use **Generate voice** to hear the scene locally and edit caption text and timing in **Captions**. Install Kokoro with `pnpm setup:voice` if it is missing. The bundled sample can preview and export without installing Kokoro.
+- Use **Export MP4** to render and download the video. The saved project and MP4 live under `output/studio-*/`. An optional soundtrack is mixed during export.
+
+The editor saves one draft plus imported media in the browser on this device. The server listens on loopback. The Studio uses the local generation pipeline. Paid generation remains available through the CLI below.
+
+For a production frontend build, run `pnpm build` followed by `pnpm studio:preview`.
+
 ## Try a local demo
 
 ```sh
