@@ -250,6 +250,8 @@ export function SceneInspector({
         />
         <NumberInput
           label="Scene duration (seconds)"
+          disabled={scene.voiceOutdated}
+          description={scene.voiceOutdated ? 'Duration will be set from the new recording.' : undefined}
           min={1}
           max={maxSceneFrames / FPS}
           value={framesFor(scene) / FPS}
@@ -294,8 +296,9 @@ export function SceneInspector({
               {captionsFor(scene).length} cues <ChevronDown size={13} />
             </span>
           </summary>
-          {!scene.voice && <p>Generate narration before editing caption timing.</p>}
+          {(!scene.voice || scene.voiceOutdated) && <p>Generate narration before editing caption timing.</p>}
           {scene.voice &&
+            !scene.voiceOutdated &&
             captionsFor(scene).map((cue, i, cues) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: Caption slots stay in order, and their text and timing are editable.
               <div className="caption-edit" key={i}>
@@ -377,7 +380,7 @@ export function SceneInspector({
                 </Button>
               </div>
             ))}
-          {scene.voice && (
+          {scene.voice && !scene.voiceOutdated && (
             <Button
               size="compact-xs"
               variant="subtle"

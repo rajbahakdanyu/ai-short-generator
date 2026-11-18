@@ -94,10 +94,14 @@ export async function buildStoryboard(
     const id = `scene-${index + 1}`;
     const audio = `${id}.wav`;
     const output = join(assets, audio);
-    const voice = prepared[index]?.voice;
-    if (voice) await copyFile(voice, output);
-    const frames = prepared[index]?.frames ?? (await audioFrames(output, signal));
-    const captions = prepared[index]?.captions ?? narrationCaptions(scene.narration, frames);
+    const timing = prepared[index];
+    if (timing?.voice) await copyFile(timing.voice, output);
+    const recordedFrames =
+      timing?.voice && timing.frames !== undefined ? timing.frames : await audioFrames(output, signal);
+    // A duration supplied without a recording can extend generated speech but must never truncate it.
+    const frames = Math.max(recordedFrames, timing?.frames ?? 0);
+    const captions =
+      (timing?.voice ? timing.captions : undefined) ?? narrationCaptions(scene.narration, frames);
     if (scene.video !== undefined) {
       const video = `${id}.mp4`;
       await fitVideoToScene(scene.video, join(assets, video), frames, signal);

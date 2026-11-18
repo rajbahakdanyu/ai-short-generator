@@ -8,7 +8,7 @@ import {downloadAsset} from '../src/providers/asset-download.ts';
 import {paidProviders} from '../src/providers/config.ts';
 import {readProviderBytes} from '../src/providers/http.ts';
 import {generateClip} from '../src/providers/video.ts';
-import {newRecording} from '../web/scene-state.ts';
+import {exportSceneTiming, newRecording} from '../web/scene-state.ts';
 
 const scene = {
   name: 'Opening shot',
@@ -52,6 +52,14 @@ test('replacing narration clears timing from the previous recording', () => {
   assert.equal(regenerated.frames, undefined);
   assert.equal(regenerated.captions, undefined);
   assert.equal(regenerated.voiceOutdated, false);
+});
+
+test('export discards the imported frame count and captions after a narration edit', () => {
+  const voice = {name: 'old.wav', kind: 'audio' as const, source: new Blob(['fixture'])};
+  const imported = {id: 'imported', ...scene, captions: [...scene.captions], voice};
+  assert.deepEqual(exportSceneTiming(imported), {frames: scene.frames, captions: scene.captions});
+  const edited = {...imported, narration: 'A much longer replacement narration.', voiceOutdated: true};
+  assert.deepEqual(exportSceneTiming(edited), {});
 });
 
 test('provider endpoints require HTTPS outside loopback', () => {

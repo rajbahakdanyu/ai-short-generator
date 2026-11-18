@@ -57,7 +57,7 @@ import {
 import type {PaidInput} from './paid-dialog.tsx';
 import {Preview, Thumbnail} from './preview.tsx';
 import {SceneInspector} from './scene-inspector.tsx';
-import {newRecording} from './scene-state.ts';
+import {exportSceneTiming, newRecording} from './scene-state.ts';
 
 const PaidDialog = lazy(async () => ({default: (await import('./paid-dialog.tsx')).PaidDialog}));
 const theme = createTheme({
@@ -93,11 +93,14 @@ function Studio() {
   );
   const scene = draft.scenes[index];
   const totalSeconds = draft.scenes.reduce((sum, s) => sum + secondsFor(s), 0);
-  const invalidCaptions = draft.scenes.some(
-    (s) =>
-      (s.captions?.length ?? 0) > maxCaptions ||
-      s.captions?.some((_, i, cues) => captionIssue(cues, i, framesFor(s))),
-  );
+  const invalidCaptions = draft.scenes.some((scene) => {
+    const {captions} = exportSceneTiming(scene);
+    return (
+      captions &&
+      (captions.length > maxCaptions ||
+        captions.some((_, index) => captionIssue(captions, index, framesFor(scene))))
+    );
+  });
   const withinLimits =
     draft.scenes.length <= maxScenes &&
     draft.scenes.every((item) => framesFor(item) <= maxSceneFrames) &&
@@ -219,8 +222,7 @@ function Studio() {
             narration: scene.narration,
             kokoroVoice: scene.kokoroVoice,
             kind: scene.media?.kind,
-            captions: scene.voiceOutdated ? undefined : scene.captions,
-            frames: scene.frames,
+            ...exportSceneTiming(scene),
             imagePrompt: scene.imagePrompt,
           })),
         }),

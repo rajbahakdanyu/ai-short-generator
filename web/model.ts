@@ -84,10 +84,12 @@ export const sampleDraft: Draft = {
 };
 
 export const secondsFor = (scene: DraftScene) =>
-  scene.seconds ?? Math.max(2, scene.narration.trim().split(/\s+/).filter(Boolean).length / 2.5);
-export const framesFor = (scene: DraftScene) => scene.frames ?? Math.ceil(secondsFor(scene) * FPS) + 3;
+  (scene.voiceOutdated ? undefined : scene.seconds) ??
+  Math.max(2, scene.narration.trim().split(/\s+/).filter(Boolean).length / 2.5);
+export const framesFor = (scene: DraftScene) =>
+  (scene.voiceOutdated ? undefined : scene.frames) ?? Math.ceil(secondsFor(scene) * FPS) + 3;
 export const captionsFor = (scene: DraftScene) =>
-  scene.captions ??
+  (scene.voiceOutdated ? undefined : scene.captions) ??
   (scene.narration.trim() ? narrationCaptions(scene.narration.trim(), framesFor(scene)) : []);
 
 export function freshScene(narration = ''): DraftScene {
