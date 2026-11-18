@@ -13,6 +13,7 @@ export const projectSchema = z.object({
     narration: z.string().min(1),
     imagePrompt: z.string().min(1).optional(),
     image: z.string().regex(/^scene-\d+\.jpg$/).optional(),
+    video: z.string().regex(/^scene-\d+\.mp4$/).optional(),
     audio: z.string().regex(/^scene-\d+\.wav$/),
     frames: z.number().int().positive(),
     captions: z.array(cue),

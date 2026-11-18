@@ -2,28 +2,30 @@ import {access, readFile, rm, writeFile} from 'node:fs/promises';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {z} from 'zod';
-import {audioFrames, normalizeSpeech, run, toJpeg} from './media.ts';
+import {audioFrames, fitVideoToScene, normalizeSpeech, run, toJpeg} from './media.ts';
 import {narrationCaptions, type Project} from './project.ts';
 
+const localPath = z.string().trim().min(1);
+const narration = z.string().trim().min(1);
 const storyboardSchema = z.object({
   title: z.string().trim().min(1),
-  scenes: z.array(z.object({
-    narration: z.string().trim().min(1),
-    image: z.string().trim().min(1),
-  })).min(1),
+  scenes: z.array(z.union([
+    z.object({narration, image: localPath, video: z.never().optional()}),
+    z.object({narration, video: localPath, image: z.never().optional()}),
+  ])).min(1),
 });
 
 export async function readStoryboard(path: string) {
   const board = storyboardSchema.parse(JSON.parse(await readFile(path, 'utf8')));
-  const scenes = board.scenes.map((scene) => ({
-    ...scene,
-    image: resolve(dirname(path), scene.image),
-  }));
+  const scenes = board.scenes.map((scene) => scene.video !== undefined
+    ? {...scene, video: resolve(dirname(path), scene.video)}
+    : {...scene, image: resolve(dirname(path), scene.image)});
   for (const [index, scene] of scenes.entries()) {
+    const visual = scene.video ?? scene.image;
     try {
-      await access(scene.image);
+      await access(visual);
     } catch {
-      throw new Error(`Scene ${index + 1} image could not be opened: ${scene.image}`);
+      throw new Error(`Scene ${index + 1} visual could not be opened: ${visual}`);
     }
   }
   return {...board, scenes};
@@ -48,22 +50,27 @@ export async function buildStoryboard(
   const input = join(directory, 'storyboard.json');
   const assets = join(directory, 'assets');
   await writeFile(input, JSON.stringify(board, null, 2) + '\n');
-  for (const [index, scene] of board.scenes.entries()) {
-    await toJpeg(scene.image, join(assets, `scene-${index + 1}.jpg`));
-  }
-
   console.log('Generating narration locally with Kokoro');
   await run(python, [join(root, 'scripts/narrate.py'), input, assets]);
   const scenes: Project['scenes'] = [];
   for (const [index, scene] of board.scenes.entries()) {
-    const image = `scene-${index + 1}.jpg`;
+    const id = `scene-${index + 1}`;
     const audio = `scene-${index + 1}.wav`;
     const speech = join(assets, `speech-${index + 1}.wav`);
     const output = join(assets, audio);
     await normalizeSpeech(speech, output);
     await rm(speech);
     const frames = await audioFrames(output);
-    scenes.push({narration: scene.narration, image, audio, frames, captions: narrationCaptions(scene.narration, frames)});
+    const captions = narrationCaptions(scene.narration, frames);
+    if (scene.video !== undefined) {
+      const video = `${id}.mp4`;
+      await fitVideoToScene(scene.video, join(assets, video), frames);
+      scenes.push({narration: scene.narration, video, audio, frames, captions});
+    } else {
+      const image = `${id}.jpg`;
+      await toJpeg(scene.image, join(assets, image));
+      scenes.push({narration: scene.narration, image, audio, frames, captions});
+    }
   }
   return {title: board.title, scenes};
 }

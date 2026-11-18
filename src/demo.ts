@@ -1,7 +1,7 @@
 import {copyFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {audioFrames, run, toWav} from './media.ts';
+import {audioFrames, fitVideoToScene, run, toWav} from './media.ts';
 import {estimatedCaptions, FPS, type Project} from './project.ts';
 
 const shots = [
@@ -11,6 +11,7 @@ const shots = [
   },
   {
     imagePrompt: 'A close side view of the turbulent hot gas outside the event horizon',
+    clip: 'accretion-disk.mp4',
     phrases: ['That light comes from gas', 'swirling outside the black hole.', 'The gas gets so hot', 'it starts to glow.'],
   },
   {
@@ -26,18 +27,24 @@ const shots = [
 export async function demoProject(assets: string, suppliedMusic?: Project['music']): Promise<Project> {
   const scenes: Project['scenes'] = [];
 
-  for (const [index, {imagePrompt, phrases}] of shots.entries()) {
+  for (const [index, {imagePrompt, phrases, clip}] of shots.entries()) {
     const id = `scene-${index + 1}`;
-    const image = `${id}.jpg`;
     const audio = `${id}.wav`;
     const wav = join(assets, audio);
     const narration = phrases.join(' ');
-    await copyFile(new URL(`../demo/${image}`, import.meta.url), join(assets, image));
     await toWav(fileURLToPath(new URL(`../demo/${id}.flac`, import.meta.url)), wav);
 
     const frames = await audioFrames(wav);
     const captions = estimatedCaptions(phrases, frames);
-    scenes.push({narration, audio, frames, captions, imagePrompt, image});
+    if (clip) {
+      const video = `${id}.mp4`;
+      await fitVideoToScene(fileURLToPath(new URL(`../demo/${clip}`, import.meta.url)), join(assets, video), frames);
+      scenes.push({narration, audio, frames, captions, video});
+    } else {
+      const image = `${id}.jpg`;
+      await copyFile(new URL(`../demo/${image}`, import.meta.url), join(assets, image));
+      scenes.push({narration, audio, frames, captions, imagePrompt, image});
+    }
   }
 
   if (!suppliedMusic) {

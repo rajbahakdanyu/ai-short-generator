@@ -14,6 +14,16 @@ export async function toJpeg(input: string, output: string) {
   ]);
 }
 
+export async function fitVideoToScene(input: string, output: string, frames: number) {
+  await run('ffmpeg', [
+    '-v', 'error', '-nostdin', '-stream_loop', '-1', '-an', '-i', input,
+    '-map', '0:V:0', '-an', '-sn', '-dn',
+    '-vf', `fps=${FPS}:start_time=0,scale=w='min(1920,iw)':h='min(1920,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1`,
+    '-frames:v', String(frames), '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
+    '-pix_fmt', 'yuv420p', '-movflags', '+faststart', output,
+  ]);
+}
+
 export async function normalizeSpeech(input: string, output: string) {
   await run('ffmpeg', [
     '-v', 'error', '-nostdin', '-i', input,

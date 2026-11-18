@@ -1,5 +1,5 @@
 import {
-  AbsoluteFill, Audio, Composition, Img, interpolate, registerRoot,
+  AbsoluteFill, Audio, Composition, Img, interpolate, OffthreadVideo, registerRoot,
   Sequence, staticFile, useCurrentFrame, useVideoConfig,
 } from 'remotion';
 import {FPS, type Project, type Scene} from './project.ts';
@@ -15,13 +15,17 @@ function Slide({scene, index}: {scene: Scene; index: number}) {
   const translate = interpolate(progress, [0, 1], pushIn ? [-20, 12] : [20, -12]);
   return (
     <AbsoluteFill style={{backgroundColor: '#0b0d15', overflow: 'hidden'}}>
-      <AbsoluteFill style={{transform: `translateX(${translate}px) scale(${scale})`}}>
-        {scene.image ? (
-          <Img src={staticFile(scene.image)} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
-        ) : (
-          <AbsoluteFill style={{background: 'radial-gradient(ellipse at 50% 39%, #03050c 11%, #241842 15%, #d47953 17%, #592f67 23%, #101731 43%, #03050c 72%)'}} />
-        )}
-      </AbsoluteFill>
+      {scene.video ? (
+        <OffthreadVideo muted src={staticFile(scene.video)} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+      ) : (
+        <AbsoluteFill style={{transform: `translateX(${translate}px) scale(${scale})`}}>
+          {scene.image ? (
+            <Img src={staticFile(scene.image)} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+          ) : (
+            <AbsoluteFill style={{background: 'radial-gradient(ellipse at 50% 39%, #03050c 11%, #241842 15%, #d47953 17%, #592f67 23%, #101731 43%, #03050c 72%)'}} />
+          )}
+        </AbsoluteFill>
+      )}
       <AbsoluteFill style={{background: 'linear-gradient(transparent 47%, #04050d60 70%, #04050de8 100%)'}} />
       <Audio src={staticFile(scene.audio)} />
       {caption && (

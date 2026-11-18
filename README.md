@@ -19,13 +19,13 @@ The first render may download Remotion's headless browser.
 pnpm generate --demo
 ```
 
-The demo uses four bundled black hole illustrations, bundled neural narration, estimated phrase-level caption timing, and a locally synthesized ambient bed. The narration was generated locally with [Kokoro ONNX](https://github.com/thewh1teagle/kokoro-onnx) using its `af_heart` voice. Running the demo requires neither the model files nor an API key.
+The demo mixes three bundled black hole illustrations and a moving accretion-disk visualization with bundled neural narration, estimated phrase-level caption timing, and a locally synthesized ambient bed. The narration was generated locally with [Kokoro ONNX](https://github.com/thewh1teagle/kokoro-onnx) using its `af_heart` voice. Running the demo requires neither the model files nor an API key.
 
 ## Make a Short with ChatGPT and local narration
 
 1. Run `pnpm setup:voice` once. It uses Python 3.12 and downloads about 340 MB of Kokoro model and voice files into the ignored `.kokoro/` directory.
-2. Ask ChatGPT for a script split into scenes and a portrait illustration for each scene. For a roughly 45-second Short, ask for about 100 spoken words across six to eight scenes.
-3. Save the images and a `storyboard.json` together. Image paths are relative to the storyboard file. Each scene supplies its exact spoken text and one local image.
+2. Ask ChatGPT for a script split into scenes and a portrait illustration or clip for each scene. For a roughly 45-second Short, ask for about 100 spoken words across six to eight scenes.
+3. Save the images or MP4 clips and a `storyboard.json` together. Visual paths are relative to the storyboard file. Each scene supplies its exact spoken text and either an `image` or a `video`.
 
 ```json
 {
@@ -37,7 +37,7 @@ The demo uses four bundled black hole illustrations, bundled neural narration, e
     },
     {
       "narration": "It's hot gas orbiting outside the event horizon.",
-      "image": "scene-2.png"
+      "video": "scene-2.mp4"
     }
   ]
 }
@@ -47,9 +47,11 @@ The demo uses four bundled black hole illustrations, bundled neural narration, e
 pnpm generate --storyboard path/to/storyboard.json
 ```
 
+Narration sets the scene length. Clips are cropped to fill the vertical frame and play muted under the narration. A longer clip is trimmed to fit, and a shorter clip loops. Stills retain their pan and zoom.
+
 Append `--music /path/to/track.mp3` to mix a local track under the narration. The final export is a 1080 × 1920, 30 fps H.264 MP4 with AAC audio.
 
-Each run prints a unique directory under `output/` containing the source storyboard, `project.json`, the converted images and narration in `assets/`, and `short.mp4`. Caption timing is estimated from each scene's narration length. You can edit captions in `project.json` and rerender without regenerating narration.
+Each run prints a unique directory under `output/` containing the source storyboard, `project.json`, the prepared visuals and narration in `assets/`, and `short.mp4`. Caption timing is estimated from each scene's narration length. You can edit captions in `project.json` and rerender without regenerating narration.
 
 ```sh
 pnpm generate --render output/your-project-directory
@@ -84,3 +86,5 @@ The four bundled JPEGs in `demo/` were created with the built-in ImageGen tool. 
 2. A side-on close-up of turbulent incandescent gas, with intricate copper and ivory filaments in orbital flow.
 3. A distant black hole warping a cool-blue background starfield into slender, duplicated arcs around the shadow.
 4. A deep-space wide shot with a thin, asymmetric golden arc and a vast field of cold stars.
+
+The moving demo shot is adapted from NASA Goddard Space Flight Center and Jeremy Schnittman’s [Black Hole Accretion Disk Visualization](https://svs.gsfc.nasa.gov/13326/).
