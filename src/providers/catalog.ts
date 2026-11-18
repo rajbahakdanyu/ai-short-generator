@@ -39,8 +39,10 @@ export const voiceProviders = [
   'elevenlabs',
 ] as const;
 
+type StageSelection = {provider?: string; model?: string; apiKey?: string; baseUrl?: string};
+
 export type PaidSelection = {
-  script?: {provider?: string; model?: string};
-  image?: {provider?: string; model?: string};
-  voice?: {provider?: string; model?: string; voice?: string};
+  script?: StageSelection;
+  image?: StageSelection & {size?: string; aspectRatio?: string; options?: string};
+  voice?: StageSelection & {voice?: string; format?: string};
 };

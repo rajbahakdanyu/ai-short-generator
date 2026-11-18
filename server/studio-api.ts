@@ -33,6 +33,8 @@ const requestSchema = z.object({
 const providerPick = z.object({
   provider: z.string().trim().min(1).max(50).optional(),
   model: z.string().trim().min(1).max(300).optional(),
+  apiKey: z.string().trim().min(1).max(1500).optional(),
+  baseUrl: z.string().trim().min(1).max(1000).optional(),
 });
 const paidRequest = z.object({
   topic: z.string().trim().min(1).max(4000),
@@ -40,8 +42,19 @@ const paidRequest = z.object({
   selection: z
     .object({
       script: providerPick.optional(),
-      image: providerPick.optional(),
-      voice: providerPick.extend({voice: z.string().trim().min(1).max(200).optional()}).optional(),
+      image: providerPick
+        .extend({
+          size: z.string().trim().min(1).max(50).optional(),
+          aspectRatio: z.string().trim().min(1).max(30).optional(),
+          options: z.string().trim().min(1).max(5000).optional(),
+        })
+        .optional(),
+      voice: providerPick
+        .extend({
+          voice: z.string().trim().min(1).max(200).optional(),
+          format: z.enum(['wav', 'mp3', 'flac', 'aac', 'opus', 'pcm']).optional(),
+        })
+        .optional(),
     })
     .optional(),
 });

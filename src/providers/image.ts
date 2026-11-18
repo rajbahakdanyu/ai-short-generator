@@ -1,7 +1,6 @@
 import {setTimeout} from 'node:timers/promises';
 import {z} from 'zod';
 import type {RemoteConfig} from './config.ts';
-import {setting} from './config.ts';
 import {downloadAsset, geminiParts, request} from './http.ts';
 
 const imageReply = z.object({
@@ -35,9 +34,12 @@ async function generateReplicate(config: RemoteConfig, prompt: string, options: 
   return downloadAsset(url);
 }
 
-export async function generateImage(config: RemoteConfig, prompt: string, options: object) {
-  const {provider, model, officialOpenAi} = config;
-  const aspect = setting('IMAGE_ASPECT_RATIO') ?? '9:16';
+export async function generateImage(
+  config: RemoteConfig & {options: object; aspectRatio?: string; size?: string},
+  prompt: string,
+) {
+  const {options, size, provider, model, officialOpenAi} = config;
+  const aspect = config.aspectRatio ?? '9:16';
   if (provider === 'google') {
     if (model.replace(/^models\//, '').startsWith('imagen-')) {
       const id = encodeURIComponent(model.replace(/^models\//, ''));
@@ -69,7 +71,6 @@ export async function generateImage(config: RemoteConfig, prompt: string, option
   }
   if (provider === 'replicate') return generateReplicate(config, prompt, options);
 
-  const size = setting('IMAGE_SIZE');
   const params =
     officialOpenAi && model.startsWith('gpt-image')
       ? {size: size ?? '1024x1536', quality: 'medium', output_format: 'jpeg'}

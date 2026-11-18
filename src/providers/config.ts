@@ -1,4 +1,5 @@
 import {loadEnvFile} from 'node:process';
+import {z} from 'zod';
 import {defaultKokoroVoice, parseKokoroVoice} from '../kokoro-voices.ts';
 import {imageProviders, type PaidSelection, scriptProviders, voiceProviders} from './catalog.ts';
 
@@ -58,7 +59,7 @@ function endpointFor(provider: Provider, stageUrl?: string) {
 function stageConfig<P extends Provider>(
   stage: Stage,
   allowed: readonly P[],
-  selection?: {provider?: string; model?: string},
+  selection?: PaidSelection['script'],
 ) {
   const configured = setting(`${stage}_PROVIDER`) ?? setting('PAID_PROVIDER') ?? 'openai';
   const selected = selection?.provider ?? configured;
@@ -70,13 +71,18 @@ function stageConfig<P extends Provider>(
     );
   }
 
-  const endpoint = new URL(
+  if (selection?.baseUrl && !selection.apiKey) {
+    throw new Error(`Enter a ${stage.toLowerCase()} API key when overriding its base URL.`);
+  }
+  const baseUrl =
+    selection?.baseUrl ??
     required(
       `${stage}_BASE_URL`,
       endpointFor(provider, sameProvider ? setting(`${stage}_BASE_URL`) : undefined),
-    ),
-  );
+    );
+  const endpoint = URL.parse(baseUrl);
   if (
+    !endpoint ||
     !['http:', 'https:'].includes(endpoint.protocol) ||
     endpoint.username ||
     endpoint.password ||
@@ -91,7 +97,8 @@ function stageConfig<P extends Provider>(
   const [keyName] = providers[provider];
   const apiKey = required(
     keyName,
-    (sameProvider ? setting(`${stage}_API_KEY`) : undefined) ??
+    selection?.apiKey ??
+      (sameProvider ? setting(`${stage}_API_KEY`) : undefined) ??
       setting(keyName) ??
       (provider === 'google' ? setting('GEMINI_API_KEY') : undefined),
   );
@@ -116,12 +123,34 @@ function voiceConfig(selection?: PaidSelection['voice']) {
   const config = stageConfig('VOICE', voiceProviders, selection);
   return {
     ...config,
+    format: selection?.format ?? (config.provider === configured ? setting('VOICE_FORMAT') : undefined),
     voice: required(
       'VOICE',
       selection?.voice ??
         (config.provider === configured ? setting('VOICE') : undefined) ??
         (config.officialOpenAi ? 'onyx' : undefined),
     ),
+  };
+}
+
+function imageConfig(selection?: PaidSelection['image']) {
+  const config = stageConfig('IMAGE', imageProviders, selection);
+  const configured = setting('IMAGE_PROVIDER') ?? setting('PAID_PROVIDER') ?? 'openai';
+  const sameProvider = config.provider === configured;
+  const raw = selection?.options ?? (sameProvider ? setting('IMAGE_OPTIONS') : undefined);
+  let options: Record<string, unknown> = {};
+  if (raw) {
+    try {
+      options = z.record(z.string(), z.unknown()).parse(JSON.parse(raw));
+    } catch {
+      throw new Error('Image options must be a valid JSON object.');
+    }
+  }
+  return {
+    ...config,
+    options,
+    size: selection?.size ?? (sameProvider ? setting('IMAGE_SIZE') : undefined),
+    aspectRatio: selection?.aspectRatio ?? (sameProvider ? setting('IMAGE_ASPECT_RATIO') : undefined),
   };
 }
 
@@ -135,7 +164,7 @@ export function paidProviders(planOnly: boolean, selection?: PaidSelection) {
   if (planOnly) return {script};
   return {
     script,
-    image: stageConfig('IMAGE', imageProviders, selection?.image),
+    image: imageConfig(selection?.image),
     voice: voiceConfig(selection?.voice),
   };
 }

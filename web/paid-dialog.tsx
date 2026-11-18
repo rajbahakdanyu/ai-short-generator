@@ -1,6 +1,17 @@
-import {Button, FileInput, Group, Modal, Select, Stack, Text, TextInput} from '@mantine/core';
+import {
+  Button,
+  FileInput,
+  Group,
+  Modal,
+  PasswordInput,
+  Select,
+  Stack,
+  Text,
+  Textarea,
+  TextInput,
+} from '@mantine/core';
 import {Sparkles} from 'lucide-react';
-import {useState} from 'react';
+import {type Dispatch, type SetStateAction, useState} from 'react';
 import {defaultKokoroVoice, kokoroVoices} from '../src/kokoro-voices.ts';
 import {
   imageProviders,
@@ -16,27 +27,44 @@ const options = (names: readonly string[]) => [
   {value: envValue, label: 'Use .env settings'},
   ...names.map((value) => ({value, label: value === 'kokoro' ? 'Kokoro (local)' : value})),
 ];
-const scripts = options(scriptProviders);
-const images = options(imageProviders);
-const voices = options([...voiceProviders, 'kokoro']);
+const stages = {
+  script: {label: 'Script', providers: options(scriptProviders)},
+  image: {label: 'Image', providers: options(imageProviders)},
+  voice: {label: 'Voice', providers: options([...voiceProviders, 'kokoro'])},
+};
 
 export function PaidDialog({
   opened,
   close,
   submit,
+  selection,
+  setSelection,
 }: {
   opened: boolean;
   close: () => void;
   submit: (input: PaidInput, track?: File) => void;
+  selection: PaidSelection;
+  setSelection: Dispatch<SetStateAction<PaidSelection>>;
 }) {
   const [topic, setTopic] = useState('');
   const [mode, setMode] = useState<PaidInput['mode']>('plan');
   const [soundtrack, setSoundtrack] = useState<File | null>(null);
-  const [selection, setSelection] = useState<PaidSelection>({});
+  const visible: (keyof PaidSelection)[] = mode === 'plan' ? ['script'] : ['script', 'image', 'voice'];
+  const missingEndpointKey = visible.some((stage) => {
+    const choice = selection[stage];
+    if (choice?.provider === 'kokoro') return false;
+    return choice?.baseUrl?.trim() && !choice.apiKey?.trim();
+  });
+
+  function update<K extends keyof PaidSelection>(stage: K, patch: NonNullable<PaidSelection[K]>) {
+    setSelection((previous) => ({...previous, [stage]: {...previous[stage], ...patch}}));
+  }
 
   const clean = (stage: keyof PaidSelection) => ({
     provider: selection[stage]?.provider,
     model: selection[stage]?.model?.trim() || undefined,
+    apiKey: selection[stage]?.apiKey?.trim() || undefined,
+    baseUrl: selection[stage]?.baseUrl?.trim() || undefined,
   });
 
   return (
@@ -44,15 +72,30 @@ export function PaidDialog({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          if (!topic.trim()) return;
+          if (!topic.trim() || missingEndpointKey) return;
           submit(
             {
               topic: topic.trim(),
               mode,
               selection: {
                 script: clean('script'),
-                image: clean('image'),
-                voice: {...clean('voice'), voice: selection.voice?.voice?.trim() || undefined},
+                image:
+                  mode === 'plan'
+                    ? undefined
+                    : {
+                        ...clean('image'),
+                        size: selection.image?.size?.trim() || undefined,
+                        aspectRatio: selection.image?.aspectRatio?.trim() || undefined,
+                        options: selection.image?.options?.trim() || undefined,
+                      },
+                voice:
+                  mode === 'plan'
+                    ? undefined
+                    : {
+                        ...clean('voice'),
+                        voice: selection.voice?.voice?.trim() || undefined,
+                        format: selection.voice?.format || undefined,
+                      },
               },
             },
             mode === 'plan' ? undefined : (soundtrack ?? undefined),
@@ -81,66 +124,126 @@ export function PaidDialog({
             }}
           />
           <div className="provider-settings">
-            {(['script', 'image', 'voice'] as const)
-              .filter((stage) => mode !== 'plan' || stage === 'script')
-              .map((stage) => (
-                <div className="provider-row" key={stage}>
-                  <Select
-                    label={`${stage[0].toUpperCase()}${stage.slice(1)} provider`}
-                    searchable
-                    allowDeselect={false}
-                    value={selection[stage]?.provider ?? envValue}
-                    data={stage === 'script' ? scripts : stage === 'image' ? images : voices}
-                    onChange={(choice) =>
-                      setSelection((previous) => ({
-                        ...previous,
-                        [stage]: {provider: choice && choice !== envValue ? choice : undefined},
-                      }))
-                    }
-                  />
-                  {(stage !== 'voice' || !['xai', 'kokoro'].includes(selection.voice?.provider ?? '')) && (
-                    <TextInput
-                      label={`${stage[0].toUpperCase()}${stage.slice(1)} model`}
-                      placeholder="Use configured model"
-                      maxLength={300}
-                      value={selection[stage]?.model ?? ''}
-                      onChange={(event) => {
-                        const {value} = event.currentTarget;
-                        setSelection((previous) => ({
-                          ...previous,
-                          [stage]: {...previous[stage], model: value},
-                        }));
-                      }}
-                    />
-                  )}
-                  {stage === 'voice' && selection.voice?.provider === 'kokoro' && (
+            {visible.map((stage) => {
+              const {label, providers} = stages[stage];
+              const choice = selection[stage];
+              const localVoice = stage === 'voice' && choice?.provider === 'kokoro';
+              return (
+                <fieldset className="provider-block" key={stage}>
+                  <legend>{stage === 'voice' ? 'Narration' : label}</legend>
+                  <div className="provider-row">
                     <Select
-                      label="Kokoro voice"
-                      data={Object.entries(kokoroVoices).map(([value, label]) => ({value, label}))}
-                      value={selection.voice.voice ?? defaultKokoroVoice}
+                      label={`${label} provider`}
+                      searchable
                       allowDeselect={false}
-                      onChange={(voice) =>
+                      value={choice?.provider ?? envValue}
+                      data={providers}
+                      onChange={(provider) =>
                         setSelection((previous) => ({
                           ...previous,
-                          voice: {...previous.voice, voice: voice ?? undefined},
+                          [stage]: {provider: provider && provider !== envValue ? provider : undefined},
                         }))
                       }
                     />
+                    {!localVoice && (stage !== 'voice' || choice?.provider !== 'xai') && (
+                      <TextInput
+                        label={`${label} model`}
+                        placeholder="Use configured model"
+                        maxLength={300}
+                        value={choice?.model ?? ''}
+                        onChange={(event) => update(stage, {model: event.currentTarget.value})}
+                      />
+                    )}
+                    {localVoice && (
+                      <Select
+                        label="Kokoro voice"
+                        allowDeselect={false}
+                        data={Object.entries(kokoroVoices).map(([value, name]) => ({value, label: name}))}
+                        value={selection.voice?.voice ?? defaultKokoroVoice}
+                        onChange={(voice) => update('voice', {voice: voice ?? undefined})}
+                      />
+                    )}
+                    {!localVoice && (
+                      <>
+                        <PasswordInput
+                          label={`${label} API key`}
+                          placeholder="Use configured API key"
+                          autoComplete="off"
+                          maxLength={1500}
+                          value={choice?.apiKey ?? ''}
+                          error={
+                            !!choice?.baseUrl?.trim() &&
+                            !choice.apiKey?.trim() &&
+                            'Enter a key for this endpoint'
+                          }
+                          onChange={(event) => update(stage, {apiKey: event.currentTarget.value})}
+                        />
+                        <TextInput
+                          label={`${label} API base URL`}
+                          placeholder="Use configured endpoint"
+                          autoComplete="off"
+                          spellCheck={false}
+                          maxLength={1000}
+                          value={choice?.baseUrl ?? ''}
+                          onChange={(event) => update(stage, {baseUrl: event.currentTarget.value})}
+                        />
+                      </>
+                    )}
+                    {stage === 'voice' && !localVoice && (
+                      <>
+                        <TextInput
+                          label="Voice ID"
+                          placeholder="Use configured voice"
+                          maxLength={200}
+                          value={selection.voice?.voice ?? ''}
+                          onChange={(event) => update('voice', {voice: event.currentTarget.value})}
+                        />
+                        {!['xai', 'google', 'elevenlabs'].includes(choice?.provider ?? '') && (
+                          <Select
+                            label="Voice output format"
+                            placeholder="Use configured format"
+                            clearable
+                            data={['wav', 'mp3', 'flac', 'aac', 'opus', 'pcm']}
+                            value={selection.voice?.format ?? null}
+                            onChange={(format) => update('voice', {format: format ?? undefined})}
+                          />
+                        )}
+                      </>
+                    )}
+                  </div>
+                  {stage === 'image' && (
+                    <details className="provider-advanced">
+                      <summary>Image generation options</summary>
+                      <div className="provider-row">
+                        <TextInput
+                          label="Image size"
+                          placeholder="e.g. 1024x1536"
+                          maxLength={50}
+                          value={selection.image?.size ?? ''}
+                          onChange={(event) => update('image', {size: event.currentTarget.value})}
+                        />
+                        <TextInput
+                          label="Aspect ratio"
+                          placeholder="e.g. 9:16"
+                          maxLength={30}
+                          value={selection.image?.aspectRatio ?? ''}
+                          onChange={(event) => update('image', {aspectRatio: event.currentTarget.value})}
+                        />
+                      </div>
+                      <Textarea
+                        label="Provider-specific options (JSON)"
+                        placeholder='{"quality":"medium"}'
+                        autosize
+                        minRows={2}
+                        maxLength={5000}
+                        value={selection.image?.options ?? ''}
+                        onChange={(event) => update('image', {options: event.currentTarget.value})}
+                      />
+                    </details>
                   )}
-                  {stage === 'voice' && selection.voice?.provider !== 'kokoro' && (
-                    <TextInput
-                      label="Voice ID"
-                      placeholder="Use configured voice"
-                      maxLength={200}
-                      value={selection.voice?.voice ?? ''}
-                      onChange={(event) => {
-                        const {value} = event.currentTarget;
-                        setSelection((previous) => ({...previous, voice: {...previous.voice, voice: value}}));
-                      }}
-                    />
-                  )}
-                </div>
-              ))}
+                </fieldset>
+              );
+            })}
           </div>
           {mode !== 'plan' && (
             <FileInput
@@ -153,25 +256,35 @@ export function PaidDialog({
             />
           )}
           <Text size="sm" c="dimmed">
-            Keys and endpoint settings come from the local .env file. The selected providers may charge for
-            this run.
+            Keys you enter stay in this tab until you reload it. Blank fields use configured defaults. The
+            selected providers may charge for this run.
           </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={close}>
-              Cancel
-            </Button>
+          <Group justify="space-between">
             <Button
-              type="submit"
-              className="primary"
-              leftSection={<Sparkles size={16} />}
-              disabled={!topic.trim()}
+              variant="subtle"
+              color="gray"
+              disabled={Object.keys(selection).length === 0}
+              onClick={() => setSelection({})}
             >
-              {mode === 'plan'
-                ? 'Generate storyboard'
-                : mode === 'prepare'
-                  ? 'Prepare scenes'
-                  : 'Generate and export'}
+              Clear overrides
             </Button>
+            <Group>
+              <Button variant="default" onClick={close}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="primary"
+                leftSection={<Sparkles size={16} />}
+                disabled={!topic.trim() || missingEndpointKey}
+              >
+                {mode === 'plan'
+                  ? 'Generate storyboard'
+                  : mode === 'prepare'
+                    ? 'Prepare scenes'
+                    : 'Generate and export'}
+              </Button>
+            </Group>
           </Group>
         </Stack>
       </form>

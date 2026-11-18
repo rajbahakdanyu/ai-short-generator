@@ -1,5 +1,4 @@
 import type {RemoteConfig} from './config.ts';
-import {setting} from './config.ts';
 import {geminiParts, request} from './http.ts';
 
 const direction =
@@ -22,7 +21,7 @@ function pcmWave(data: Buffer, sampleRate: number) {
   return Buffer.concat([header, data]);
 }
 
-export async function generateVoice(config: RemoteConfig & {voice: string}, input: string) {
+export async function generateVoice(config: RemoteConfig & {voice: string; format?: string}, input: string) {
   const {provider, model, voice, officialOpenAi} = config;
   if (provider === 'google') {
     const parts = await geminiParts(config, {
@@ -53,7 +52,7 @@ export async function generateVoice(config: RemoteConfig & {voice: string}, inpu
   } else if (provider === 'xai') {
     response = await request(config, '/tts', {text: input, voice_id: voice, language: 'en'});
   } else {
-    const format = setting('VOICE_FORMAT') ?? (provider === 'openrouter' ? 'mp3' : 'wav');
+    const format = config.format ?? (provider === 'openrouter' ? 'mp3' : 'wav');
     response = await request(config, '/audio/speech', {
       model,
       voice,

@@ -46,6 +46,7 @@ import {
 import {lazy, Suspense, useEffect, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {defaultKokoroVoice, isKokoroVoice, kokoroVoices} from '../src/kokoro-voices.ts';
+import type {PaidSelection} from '../src/providers/catalog.ts';
 import {
   type Asset,
   api,
@@ -118,6 +119,7 @@ function Studio() {
   const [error, setError] = useState('');
   const [voiceScene, setVoiceScene] = useState<string>();
   const [dialog, setDialog] = useState<'script' | 'new' | 'sample' | 'export' | 'paid' | 'import'>();
+  const [paidSelection, setPaidSelection] = useState<PaidSelection>({});
   const [script, setScript] = useState('');
   const [job, setJob] = useState<Job | undefined>(() => {
     try {
@@ -842,6 +844,8 @@ function Studio() {
       {dialog === 'paid' && (
         <Suspense fallback={null}>
           <PaidDialog
+            selection={paidSelection}
+            setSelection={setPaidSelection}
             opened
             close={() => setDialog(undefined)}
             submit={(input, track) => void startPaid(input, track)}

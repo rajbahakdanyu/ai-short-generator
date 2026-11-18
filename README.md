@@ -34,7 +34,9 @@ Open [Short Studio](http://127.0.0.1:5173/). The bundled black-hole project open
 
 **Project → Open project folder** opens a folder containing `storyboard.json` or a prepared `project.json` and `assets/`. For a prepared project, Studio reuses the narration, captions, and scene lengths when exporting. For a storyboard, put the referenced stills and clips inside the selected folder.
 
-**Project → Generate from topic** offers storyboard-only, prepare-for-editing, and full MP4 export. Pick the provider and model separately for each stage, or use the values in `.env`. Add any API keys and custom endpoint URLs to `.env` on disk. Keys stay on the local server. Restart Studio after changing `.env`. Generated projects can be opened in the editor from the result dialog or imported later from `output/studio-*/`.
+**Project → Generate from topic** offers storyboard-only, prepare-for-editing, and full MP4 export. Each stage lets you enter its provider, model, API key, and optional custom base URL. Image options and compatible voice output formats can also be set in the dialog. A custom URL requires an explicit key for that stage so a saved key is never sent there by accident.
+
+Keys entered in Studio are masked and held in that tab's memory until you reload it or use **Clear overrides**. They are sent to the local Studio server when you submit a paid run and are excluded from saved drafts and project files. Leave fields blank to use `.env` or provider defaults. Restart Studio after changing `.env`. Open generated projects from the result dialog or import them later from `output/studio-*/`.
 
 The editor saves one draft plus imported media in the browser on this device. The server listens on loopback. Importing, previewing, and exporting an existing project make no paid API calls.
 

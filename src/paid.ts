@@ -3,7 +3,7 @@ import {join} from 'node:path';
 import {z} from 'zod';
 import {audioFrames, normalizeSpeech, toJpeg} from './media.ts';
 import {narrationCaptions, type Project} from './project.ts';
-import {type PaidProviders, setting} from './providers/config.ts';
+import type {PaidProviders} from './providers/config.ts';
 import {generateImage} from './providers/image.ts';
 import {generateScript} from './providers/script.ts';
 import {generateVoice} from './providers/voice.ts';
@@ -27,8 +27,6 @@ export async function buildPaidShort(
   topic: string,
   directory: string,
 ): Promise<Project | string> {
-  const imageOptions = imageProvider && setting('IMAGE_OPTIONS');
-  const options = imageOptions ? z.record(z.string(), z.unknown()).parse(JSON.parse(imageOptions)) : {};
   if (voice?.provider === 'kokoro') await kokoroRuntime();
   console.log(`Storyboard · ${script.provider} / ${script.model}`);
   if (imageProvider && voice)
@@ -73,7 +71,7 @@ export async function buildPaidShort(
     const temporaryImage = join(assets, `${id}.image`);
     console.log(`Scene ${index + 1}/${board.scenes.length} · illustration`);
     const prompt = `${scene.imagePrompt} Cinematic portrait framing with the subject in the central 80%. No text or logos.`;
-    await writeFile(temporaryImage, await generateImage(imageProvider, prompt, options));
+    await writeFile(temporaryImage, await generateImage(imageProvider, prompt));
     await toJpeg(temporaryImage, join(assets, image));
     await rm(temporaryImage);
   }

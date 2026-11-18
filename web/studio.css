@@ -829,3 +829,35 @@ main {
   grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
   gap: 8px;
 }
+
+.provider-block {
+  min-inline-size: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px 12px;
+}
+
+.provider-block legend {
+  padding: 0 5px;
+  color: #d5d7df;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.provider-advanced {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 8px;
+}
+
+.provider-advanced summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.provider-advanced[open] summary,
+.provider-advanced .provider-row {
+  margin-bottom: 8px;
+}
