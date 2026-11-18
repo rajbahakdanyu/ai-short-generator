@@ -12,11 +12,21 @@ const shots = [
   {
     imagePrompt: 'A close side view of the turbulent hot gas outside the event horizon',
     clip: 'accretion-disk.mp4',
-    phrases: ['That light comes from gas', 'swirling outside the black hole.', 'The gas gets so hot', 'it starts to glow.'],
+    phrases: [
+      'That light comes from gas',
+      'swirling outside the black hole.',
+      'The gas gets so hot',
+      'it starts to glow.',
+    ],
   },
   {
     imagePrompt: 'Background light bent into arcs around the dark shadow by gravitational lensing',
-    phrases: ['Gravity bends the light.', 'It can even make gas', 'behind the black hole', 'appear above and below it.'],
+    phrases: [
+      'Gravity bends the light.',
+      'It can even make gas',
+      'behind the black hole',
+      'appear above and below it.',
+    ],
   },
   {
     imagePrompt: 'A wide field of stars surrounding the thin golden arc of a distant black hole',
@@ -38,7 +48,11 @@ export async function demoProject(assets: string, suppliedMusic?: Project['music
     const captions = estimatedCaptions(phrases, frames);
     if (clip) {
       const video = `${id}.mp4`;
-      await fitVideoToScene(fileURLToPath(new URL(`../demo/${clip}`, import.meta.url)), join(assets, video), frames);
+      await fitVideoToScene(
+        fileURLToPath(new URL(`../demo/${clip}`, import.meta.url)),
+        join(assets, video),
+        frames,
+      );
       scenes.push({narration, audio, frames, captions, video});
     } else {
       const image = `${id}.jpg`;
@@ -57,8 +71,15 @@ export async function demoProject(assets: string, suppliedMusic?: Project['music
       '0.08*sin(2*PI*164.81*t)*(0.5+0.5*sin(2*PI*0.19*t))',
     ].join('+');
     await run('ffmpeg', [
-      '-hide_banner', '-loglevel', 'error', '-nostdin', '-f', 'lavfi',
-      '-i', `aevalsrc=${pad}:s=48000:d=${length}`, join(assets, 'music.wav'),
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-nostdin',
+      '-f',
+      'lavfi',
+      '-i',
+      `aevalsrc=${pad}:s=48000:d=${length}`,
+      join(assets, 'music.wav'),
     ]);
   }
 

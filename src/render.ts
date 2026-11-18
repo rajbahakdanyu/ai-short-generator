@@ -1,7 +1,7 @@
+import {randomUUID} from 'node:crypto';
 import {readFile, rename, rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {randomUUID} from 'node:crypto';
 import {bundle} from '@remotion/bundler';
 import {renderMedia, selectComposition} from '@remotion/renderer';
 import {projectSchema} from './project.ts';

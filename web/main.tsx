@@ -3,33 +3,103 @@ import '@fontsource-variable/inter';
 import '@fontsource-variable/space-grotesk';
 import './studio.css';
 import {
-  ActionIcon, Alert, Button, createTheme, MantineProvider, Menu, Modal, NumberInput, Progress,
-  Textarea, TextInput, Tooltip,
+  ActionIcon,
+  Alert,
+  Button,
+  createTheme,
+  MantineProvider,
+  Menu,
+  Modal,
+  NumberInput,
+  Progress,
+  Textarea,
+  TextInput,
+  Tooltip,
 } from '@mantine/core';
-import {
-  ArrowDown, ArrowDownToLine, ArrowUp, AudioLines, Check, ChevronDown, Clapperboard, ClipboardPaste,
-  Film, Image as ImageIcon, Info, Layers, Mic, MonitorPlay, MoreHorizontal, Music2, Plus, RotateCcw,
-  Trash2, Upload, X,
-} from 'lucide-react';
 import {get, set} from 'idb-keyval';
+import {
+  ArrowDown,
+  ArrowDownToLine,
+  ArrowUp,
+  AudioLines,
+  Check,
+  ChevronDown,
+  Clapperboard,
+  ClipboardPaste,
+  Film,
+  Image as ImageIcon,
+  Info,
+  Layers,
+  Mic,
+  MonitorPlay,
+  MoreHorizontal,
+  Music2,
+  Plus,
+  RotateCcw,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
 import {useEffect, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {api, assetBlob, captionsFor, formatTime, freshScene, sampleDraft, secondsFor, type Asset, type Draft, type DraftScene, type Job} from './model.ts';
+import {
+  type Asset,
+  api,
+  assetBlob,
+  captionsFor,
+  type Draft,
+  type DraftScene,
+  formatTime,
+  freshScene,
+  type Job,
+  sampleDraft,
+  secondsFor,
+} from './model.ts';
 import {Preview, Thumbnail} from './preview.tsx';
 
 const key = 'short-studio-draft';
-const theme = createTheme({fontFamily: 'Inter Variable, system-ui, sans-serif', defaultRadius: 'md'});
+const theme = createTheme({
+  fontFamily: 'Inter Variable, system-ui, sans-serif',
+  defaultRadius: 'md',
+  respectReducedMotion: true,
+});
 
-function SceneActions({index, total, move, remove}: {index: number; total: number; move: (delta: number) => void; remove: () => void}) {
-  return <Menu position="bottom-end" withinPortal>
-    <Menu.Target><ActionIcon variant="subtle" color="gray" aria-label="Scene actions"><MoreHorizontal size={17} /></ActionIcon></Menu.Target>
-    <Menu.Dropdown>
-      <Menu.Item disabled={index === 0} leftSection={<ArrowUp size={15} />} onClick={() => move(-1)}>Move up</Menu.Item>
-      <Menu.Item disabled={index === total - 1} leftSection={<ArrowDown size={15} />} onClick={() => move(1)}>Move down</Menu.Item>
-      <Menu.Divider />
-      <Menu.Item disabled={total === 1} color="red" leftSection={<Trash2 size={15} />} onClick={remove}>Delete scene</Menu.Item>
-    </Menu.Dropdown>
-  </Menu>;
+function SceneActions({
+  index,
+  total,
+  move,
+  remove,
+}: {
+  index: number;
+  total: number;
+  move: (delta: number) => void;
+  remove: () => void;
+}) {
+  return (
+    <Menu position="bottom-end" withinPortal>
+      <Menu.Target>
+        <ActionIcon variant="subtle" color="gray" aria-label="Scene actions">
+          <MoreHorizontal size={17} />
+        </ActionIcon>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Item disabled={index === 0} leftSection={<ArrowUp size={15} />} onClick={() => move(-1)}>
+          Move up
+        </Menu.Item>
+        <Menu.Item
+          disabled={index === total - 1}
+          leftSection={<ArrowDown size={15} />}
+          onClick={() => move(1)}
+        >
+          Move down
+        </Menu.Item>
+        <Menu.Divider />
+        <Menu.Item disabled={total === 1} color="red" leftSection={<Trash2 size={15} />} onClick={remove}>
+          Delete scene
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
+  );
 }
 
 function Studio() {
@@ -45,29 +115,46 @@ function Studio() {
   const [dragging, setDragging] = useState(false);
   const visualPicker = useRef<HTMLInputElement>(null);
   const musicPicker = useRef<HTMLInputElement>(null);
-  const index = Math.max(0, draft.scenes.findIndex((s) => s.id === selectedId));
+  const index = Math.max(
+    0,
+    draft.scenes.findIndex((s) => s.id === selectedId),
+  );
   const scene = draft.scenes[index];
   const running = !!job && job.phase !== 'Complete' && job.phase !== 'Failed';
   const totalSeconds = draft.scenes.reduce((sum, s) => sum + secondsFor(s), 0);
-  const invalidCaptions = draft.scenes.some((s) => s.captions?.some((cue) => !cue.text.trim() || cue.end <= cue.start));
-  const ready = !!draft.title.trim() && !invalidCaptions && draft.scenes.every((s) => s.narration.trim() && s.media);
+  const invalidCaptions = draft.scenes.some((s) =>
+    s.captions?.some((cue) => !cue.text.trim() || cue.end <= cue.start),
+  );
+  const ready =
+    !!draft.title.trim() && !invalidCaptions && draft.scenes.every((s) => s.narration.trim() && s.media);
   const videoUrl = job?.id && job.phase === 'Complete' ? `/api/studio/jobs/${job.id}/video` : undefined;
 
   useEffect(() => {
     let active = true;
-    void get<Draft>(key).then((saved) => {
-      if (active && saved?.scenes.length) {
-        setDraft(saved);
-        setSelectedId(saved.scenes[0].id);
-      }
-    }).catch(() => {if (active) setSaveError(true);}).finally(() => {if (active) setHydrated(true);});
-    return () => {active = false;};
+    void get<Draft>(key)
+      .then((saved) => {
+        if (active && saved?.scenes.length) {
+          setDraft(saved);
+          setSelectedId(saved.scenes[0].id);
+        }
+      })
+      .catch(() => {
+        if (active) setSaveError(true);
+      })
+      .finally(() => {
+        if (active) setHydrated(true);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
     const save = setTimeout(() => {
-      void set(key, draft).then(() => setSaveError(false)).catch(() => setSaveError(true));
+      void set(key, draft)
+        .then(() => setSaveError(false))
+        .catch(() => setSaveError(true));
     }, 250);
     return () => clearTimeout(save);
   }, [draft, hydrated]);
@@ -88,11 +175,17 @@ function Studio() {
       }
     };
     void poll();
-    return () => {active = false; clearTimeout(timer);};
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [pollId, running]);
 
   function patchScene(id: string, patch: Partial<DraftScene>) {
-    setDraft((current) => ({...current, scenes: current.scenes.map((s) => s.id === id ? {...s, ...patch} : s)}));
+    setDraft((current) => ({
+      ...current,
+      scenes: current.scenes.map((s) => (s.id === id ? {...s, ...patch} : s)),
+    }));
   }
 
   function moveScene(delta: number) {
@@ -108,12 +201,19 @@ function Studio() {
 
   function addScene() {
     const next = freshScene();
-    setDraft((current) => ({...current, scenes: [...current.scenes, {...next, name: `Scene ${current.scenes.length + 1}`}]}));
+    setDraft((current) => ({
+      ...current,
+      scenes: [...current.scenes, {...next, name: `Scene ${current.scenes.length + 1}`}],
+    }));
     setSelectedId(next.id);
   }
 
   function importScript() {
-    const paragraphs = script.trim().split(/\r?\n\s*\r?\n/).map((part) => part.trim()).filter(Boolean);
+    const paragraphs = script
+      .trim()
+      .split(/\r?\n\s*\r?\n/)
+      .map((part) => part.trim())
+      .filter(Boolean);
     if (!paragraphs.length) return;
     const scenes = paragraphs.map((part, i) => ({...freshScene(part), name: `Scene ${i + 1}`}));
     setDraft((current) => ({...current, scenes}));
@@ -139,7 +239,8 @@ function Studio() {
     setError('');
     try {
       const response = await api('voice', {
-        method: 'POST', headers: {'Content-Type': 'application/json', 'X-Short-Studio': '1'},
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Short-Studio': '1'},
         body: JSON.stringify({narration}),
       });
       const source = await response.blob();
@@ -151,8 +252,12 @@ function Studio() {
         await context.close();
       }
       const voice: Asset = {name: 'Kokoro · Heart', kind: 'audio', source};
-      setDraft((current) => ({...current, scenes: current.scenes.map((s) =>
-        s.id === id && s.narration === narration ? {...s, voice, seconds} : s)}));
+      setDraft((current) => ({
+        ...current,
+        scenes: current.scenes.map((s) =>
+          s.id === id && s.narration === narration ? {...s, voice, seconds} : s,
+        ),
+      }));
     } catch (issue) {
       setError(issue instanceof Error ? issue.message : String(issue));
     } finally {
@@ -166,21 +271,26 @@ function Studio() {
     setDialog('export');
     try {
       const form = new FormData();
-      form.set('storyboard', JSON.stringify({
-        title: draft.title,
-        scenes: draft.scenes.map((scene) => ({
-          narration: scene.narration,
-          kind: scene.media?.kind,
-          captions: scene.captions,
-        })),
-      }));
+      form.set(
+        'storyboard',
+        JSON.stringify({
+          title: draft.title,
+          scenes: draft.scenes.map((scene) => ({
+            narration: scene.narration,
+            kind: scene.media?.kind,
+            captions: scene.captions,
+          })),
+        }),
+      );
       for (const [i, shot] of draft.scenes.entries()) {
         if (!shot.media) throw new Error(`Add a visual to scene ${i + 1}.`);
         form.set(`visual-${i}`, await assetBlob(shot.media), shot.media.name);
         if (shot.voice) form.set(`voice-${i}`, await assetBlob(shot.voice), 'voice');
       }
       if (draft.music) form.set('music', await assetBlob(draft.music), draft.music.name);
-      const {id} = await (await api('export', {method: 'POST', headers: {'X-Short-Studio': '1'}, body: form})).json();
+      const {id} = await (
+        await api('export', {method: 'POST', headers: {'X-Short-Studio': '1'}, body: form})
+      ).json();
       setJob({id, phase: 'Preparing scenes', progress: 0});
     } catch (issue) {
       setJob({phase: 'Failed', progress: 0, error: issue instanceof Error ? issue.message : String(issue)});
@@ -194,171 +304,472 @@ function Studio() {
     setDialog(undefined);
   }
 
-  return <div className="studio">
-    <header className="topbar">
-      <div className="brand"><span className="brand-icon"><Clapperboard size={19} strokeWidth={2.5} /></span> Short Studio</div>
-      <div className="top-actions">
-        <span className="local"><span /> Local workspace</span>
-        <Menu position="bottom-end">
-          <Menu.Target><Button className="project-menu" variant="default" rightSection={<ChevronDown size={14} />}>Project</Button></Menu.Target>
-          <Menu.Dropdown>
-            <Menu.Item leftSection={<Plus size={15} />} onClick={() => setDialog('new')}>New project</Menu.Item>
-            <Menu.Item leftSection={<ClipboardPaste size={15} />} onClick={() => setDialog('script')}>Paste script</Menu.Item>
-            <Menu.Item leftSection={<RotateCcw size={15} />} onClick={() => setDialog('sample')}>Load sample project</Menu.Item>
-          </Menu.Dropdown>
-        </Menu>
-        <Tooltip label={invalidCaptions ? "Fix empty captions or invalid caption times" : "Add a title, narration and visual to each scene"} disabled={ready}>
-          <span><Button className="primary" loading={running} disabled={!ready || !hydrated || !!voiceScene}
-            leftSection={<ArrowDownToLine size={16} />} onClick={exportVideo}>Export MP4</Button></span>
-        </Tooltip>
-      </div>
-    </header>
-
-    <main>
-      <div className="project-header">
-        <div className="project-title">
-          <label htmlFor="project-title"><Layers size={15} /> STORYBOARD</label>
-          <input id="project-title" aria-label="Project title" value={draft.title} maxLength={200} placeholder="Untitled short"
-            onChange={(event) => setDraft({...draft, title: event.target.value})} />
+  return (
+    <div className="studio">
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-icon">
+            <Clapperboard size={19} strokeWidth={2.5} />
+          </span>{' '}
+          Short Studio
         </div>
-        <div className="project-meta">
-          {job && <Button variant="subtle" color="gray" size="xs" onClick={() => setDialog('export')}>{job.phase}</Button>}
-          <span><Check size={14} /> {saveError ? 'Draft storage unavailable' : hydrated ? 'Saved on this device' : 'Loading draft'}</span>
-          <span className="meta-divider" />
-          <strong>~{formatTime(totalSeconds)}</strong>
+        <div className="top-actions">
+          <span className="local">
+            <span /> Local workspace
+          </span>
+          <Menu position="bottom-end">
+            <Menu.Target>
+              <Button className="project-menu" variant="default" rightSection={<ChevronDown size={14} />}>
+                Project
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item leftSection={<Plus size={15} />} onClick={() => setDialog('new')}>
+                New project
+              </Menu.Item>
+              <Menu.Item leftSection={<ClipboardPaste size={15} />} onClick={() => setDialog('script')}>
+                Paste script
+              </Menu.Item>
+              <Menu.Item leftSection={<RotateCcw size={15} />} onClick={() => setDialog('sample')}>
+                Load sample project
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+          <Tooltip
+            label={
+              invalidCaptions
+                ? 'Fix empty captions or invalid caption times'
+                : 'Add a title, narration and visual to each scene'
+            }
+            disabled={ready}
+          >
+            <span>
+              <Button
+                className="primary"
+                loading={running}
+                disabled={!ready || !hydrated || !!voiceScene}
+                leftSection={<ArrowDownToLine size={16} />}
+                onClick={exportVideo}
+              >
+                Export MP4
+              </Button>
+            </span>
+          </Tooltip>
         </div>
-      </div>
+      </header>
 
-      {error && <Alert className="studio-alert" color="red" withCloseButton onClose={() => setError('')} role="alert">{error}</Alert>}
-      <div className="workbench">
-        <section className="panel scene-panel" aria-label="Storyboard scenes">
-          <div className="panel-heading"><div><Layers size={16} /> <h2>Scenes</h2> <span className="count">{draft.scenes.length}</span></div>
-            <Tooltip label="Add scene"><ActionIcon variant="default" aria-label="Add scene" onClick={addScene}><Plus size={17} /></ActionIcon></Tooltip>
+      <main>
+        <div className="project-header">
+          <div className="project-title">
+            <label htmlFor="project-title">
+              <Layers size={15} /> STORYBOARD
+            </label>
+            <input
+              id="project-title"
+              aria-label="Project title"
+              value={draft.title}
+              maxLength={200}
+              placeholder="Untitled short"
+              onChange={(event) => setDraft({...draft, title: event.target.value})}
+            />
           </div>
-          <div className="scene-list">
-            {draft.scenes.map((s, i) => <button type="button" className={`scene-row ${s.id === scene.id ? 'selected' : ''}`} key={s.id}
-              onClick={() => setSelectedId(s.id)} aria-pressed={s.id === scene.id}>
-              <Thumbnail scene={s} />
-              <span className="row-content">
-                <span className="row-title"><span className="row-index">{String(i + 1).padStart(2, '0')}</span>{s.name}</span>
-                <span className="row-copy">{s.narration || 'Add narration'}</span>
-                <span className="row-meta">{s.media?.kind === 'video' ? <Film size={12} /> : <ImageIcon size={12} />}
-                  {s.media?.kind === 'video' ? 'Video' : s.media ? 'Image' : 'No visual'} <span>·</span> {secondsFor(s).toFixed(1)}s</span>
-              </span>
-            </button>)}
-            <Button fullWidth variant="subtle" color="gray" className="add-scene" leftSection={<Plus size={15} />} onClick={addScene}>Add scene</Button>
+          <div className="project-meta">
+            {job && (
+              <Button variant="subtle" color="gray" size="xs" onClick={() => setDialog('export')}>
+                {job.phase}
+              </Button>
+            )}
+            <span>
+              <Check size={14} />{' '}
+              {saveError ? 'Draft storage unavailable' : hydrated ? 'Saved on this device' : 'Loading draft'}
+            </span>
+            <span className="meta-divider" />
+            <strong>~{formatTime(totalSeconds)}</strong>
           </div>
-          <div className="music-box">
-            <div className="music-icon"><Music2 size={17} /></div>
-            <div><strong>Soundtrack</strong><span>{draft.music?.name ?? 'Optional background audio'}</span></div>
-            <ActionIcon variant="subtle" color="gray" aria-label={draft.music ? 'Remove soundtrack' : 'Upload soundtrack'}
-              onClick={() => draft.music ? setDraft({...draft, music: undefined}) : musicPicker.current?.click()}>{draft.music ? <X size={16} /> : <Plus size={17} />}</ActionIcon>
-            <input type="file" accept="audio/*" hidden ref={musicPicker} aria-label="Soundtrack file" onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) setDraft({...draft, music: {name: file.name, kind: 'audio', source: file}});
-              event.target.value = '';
-            }} />
-          </div>
-        </section>
+        </div>
 
-        <section className="center" aria-label="Preview and timeline">
-          <Preview key={scene.id} scene={scene} number={index + 1} />
-          <div className="timeline panel">
-            <div className="timeline-head"><span><MonitorPlay size={15} /> Scene timeline</span><strong>{draft.scenes.length} {draft.scenes.length === 1 ? 'scene' : 'scenes'}</strong></div>
-            <div className="timeline-strip">
-              {draft.scenes.map((s, i) => <button key={s.id} type="button" aria-label={`Preview scene ${i + 1}`} aria-pressed={s.id === scene.id}
-                className={s.id === scene.id ? 'active' : ''} style={{flexGrow: secondsFor(s)}} onClick={() => setSelectedId(s.id)}>
-                <Thumbnail scene={s} /><span>{String(i + 1).padStart(2, '0')}</span>
-              </button>)}
+        {error && (
+          <Alert
+            className="studio-alert"
+            color="red"
+            withCloseButton
+            onClose={() => setError('')}
+            role="alert"
+          >
+            {error}
+          </Alert>
+        )}
+        <div className="workbench">
+          <section className="panel scene-panel" aria-label="Storyboard scenes">
+            <div className="panel-heading">
+              <div>
+                <Layers size={16} /> <h2>Scenes</h2> <span className="count">{draft.scenes.length}</span>
+              </div>
+              <Tooltip label="Add scene">
+                <ActionIcon variant="default" aria-label="Add scene" onClick={addScene}>
+                  <Plus size={17} />
+                </ActionIcon>
+              </Tooltip>
             </div>
-          </div>
-        </section>
-
-        <section className="panel inspector" aria-label="Scene settings">
-          <div className="panel-heading"><div><span className="inspector-number">{String(index + 1).padStart(2, '0')}</span> <h2>Scene details</h2></div>
-            <SceneActions index={index} total={draft.scenes.length} move={moveScene} remove={() => {
-              const remainder = draft.scenes.filter((s) => s.id !== scene.id);
-              if (!remainder.length) return;
-              setSelectedId(remainder[Math.min(index, remainder.length - 1)].id);
-              setDraft({...draft, scenes: remainder});
-            }} />
-          </div>
-          <div className="inspector-body">
-            <TextInput label="Scene name" value={scene.name} maxLength={85} onChange={(event) => patchScene(scene.id, {name: event.currentTarget.value})} />
-            <div className="field-block">
-              <div className="field-title"><span><Film size={15} /> Visual</span>
-                {scene.media && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => visualPicker.current?.click()}>Replace</Button>}</div>
-              <button className={`upload-target ${dragging ? 'dragging' : ''}`} type="button" onClick={() => visualPicker.current?.click()}
-                onDragOver={(event) => {event.preventDefault(); setDragging(true);}}
-                onDragLeave={() => setDragging(false)} onDrop={(event) => {
-                  event.preventDefault();
-                  setDragging(false);
-                  chooseVisual(event.dataTransfer.files[0]);
-                }}>
-                {scene.media ? <Thumbnail scene={scene} /> : <span className="upload-icon"><Upload size={17} /></span>}
-                <span><strong>{scene.media?.name ?? 'Choose or drop a file'}</strong><small>{scene.media?.kind === 'video' ? 'MP4 clip' : scene.media ? 'Still image' : 'Image or MP4'}</small></span>
-              </button>
-              <input type="file" hidden ref={visualPicker} accept="image/*,video/mp4,.mp4" aria-label="Scene visual file" onChange={(event) => {
-                chooseVisual(event.target.files?.[0]);
-                event.target.value = '';
-              }} />
+            <div className="scene-list">
+              {draft.scenes.map((s, i) => (
+                <button
+                  type="button"
+                  className={`scene-row ${s.id === scene.id ? 'selected' : ''}`}
+                  key={s.id}
+                  onClick={() => setSelectedId(s.id)}
+                  aria-pressed={s.id === scene.id}
+                >
+                  <Thumbnail scene={s} />
+                  <span className="row-content">
+                    <span className="row-title">
+                      <span className="row-index">{String(i + 1).padStart(2, '0')}</span>
+                      {s.name}
+                    </span>
+                    <span className="row-copy">{s.narration || 'Add narration'}</span>
+                    <span className="row-meta">
+                      {s.media?.kind === 'video' ? <Film size={12} /> : <ImageIcon size={12} />}
+                      {s.media?.kind === 'video' ? 'Video' : s.media ? 'Image' : 'No visual'} <span>·</span>{' '}
+                      {secondsFor(s).toFixed(1)}s
+                    </span>
+                  </span>
+                </button>
+              ))}
+              <Button
+                fullWidth
+                variant="subtle"
+                color="gray"
+                className="add-scene"
+                leftSection={<Plus size={15} />}
+                onClick={addScene}
+              >
+                Add scene
+              </Button>
             </div>
-            <div className="field-block narration">
-              <Textarea label={<span className="field-label"><Mic size={15} /> Narration</span>} placeholder="Type the words you want spoken…"
-                value={scene.narration} minRows={4} autosize maxRows={8} maxLength={4000}
-                onChange={(event) => patchScene(scene.id, {narration: event.currentTarget.value, voice: undefined, seconds: undefined, captions: undefined})} />
-              <div className="narration-actions">
-                <span>{scene.voice ? <><Check size={13} /> Voice ready</> : 'Kokoro · Heart'}</span>
-                <Button loading={voiceScene === scene.id} disabled={!scene.narration.trim() || !!voiceScene || running}
-                  leftSection={<AudioLines size={14} />} size="compact-sm" variant="default"
-                  onClick={() => void generateVoice()}>{scene.voice ? 'Regenerate voice' : 'Generate voice'}</Button>
+            <div className="music-box">
+              <div className="music-icon">
+                <Music2 size={17} />
+              </div>
+              <div>
+                <strong>Soundtrack</strong>
+                <span>{draft.music?.name ?? 'Optional background audio'}</span>
+              </div>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                aria-label={draft.music ? 'Remove soundtrack' : 'Upload soundtrack'}
+                onClick={() =>
+                  draft.music ? setDraft({...draft, music: undefined}) : musicPicker.current?.click()
+                }
+              >
+                {draft.music ? <X size={16} /> : <Plus size={17} />}
+              </ActionIcon>
+              <input
+                type="file"
+                accept="audio/*"
+                hidden
+                ref={musicPicker}
+                aria-label="Soundtrack file"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) setDraft({...draft, music: {name: file.name, kind: 'audio', source: file}});
+                  event.target.value = '';
+                }}
+              />
+            </div>
+          </section>
+
+          <section className="center" aria-label="Preview and timeline">
+            <Preview key={scene.id} scene={scene} number={index + 1} />
+            <div className="timeline panel">
+              <div className="timeline-head">
+                <span>
+                  <MonitorPlay size={15} /> Scene timeline
+                </span>
+                <strong>
+                  {draft.scenes.length} {draft.scenes.length === 1 ? 'scene' : 'scenes'}
+                </strong>
+              </div>
+              <div className="timeline-strip">
+                {draft.scenes.map((s, i) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    aria-label={`Preview scene ${i + 1}`}
+                    aria-pressed={s.id === scene.id}
+                    className={s.id === scene.id ? 'active' : ''}
+                    style={{flexGrow: secondsFor(s)}}
+                    onClick={() => setSelectedId(s.id)}
+                  >
+                    <Thumbnail scene={s} />
+                    <span>{String(i + 1).padStart(2, '0')}</span>
+                  </button>
+                ))}
               </div>
             </div>
-            <details className="caption-panel">
-              <summary>Captions <span>{captionsFor(scene).length} cues <ChevronDown size={13} /></span></summary>
-              {!scene.voice && <p>Generate narration before editing caption timing.</p>}
-              {scene.voice && captionsFor(scene).map((cue, i, cues) => <div className="caption-edit" key={i}>
-                <TextInput aria-label={`Caption ${i + 1}`} value={cue.text} error={!cue.text.trim()} onChange={(event) => {
-                  const text = event.currentTarget.value;
-                  patchScene(scene.id, {captions: cues.map((item, j) => j === i ? {...item, text} : item)});
-                }} />
-                <div>{(['start', 'end'] as const).map((edge) => <NumberInput key={edge} label={edge === 'start' ? 'Start (s)' : 'End (s)'}
-                  aria-label={`Caption ${i + 1} ${edge}`} error={cue.end <= cue.start} decimalScale={2} step={0.05} min={0} max={secondsFor(scene) + 0.1} value={cue[edge]}
-                  onChange={(value) => {
-                    if (typeof value === 'number') patchScene(scene.id, {captions: cues.map((item, j) => j === i ? {...item, [edge]: value} : item)});
-                  }} />)}</div>
-              </div>)}
-            </details>
-          </div>
-        </section>
-      </div>
-    </main>
+          </section>
 
-    <Modal opened={dialog === 'script'} onClose={() => setDialog(undefined)} title="Paste a script" centered>
-      <Textarea label="One scene per paragraph" placeholder="Paste your narration here…" value={script} minRows={7}
-        onChange={(event) => setScript(event.currentTarget.value)} />
-      <p className="modal-note">This replaces the current scenes. Attach a visual to each new scene before exporting.</p>
-      <Button className="primary" disabled={!script.trim()} onClick={importScript}>Create scenes</Button>
-    </Modal>
-    <Modal opened={dialog === 'new' || dialog === 'sample'} onClose={() => setDialog(undefined)}
-      title={dialog === 'new' ? 'Start a new project?' : 'Load the sample project?'} centered>
-      <p className="modal-note">This replaces the draft saved in this browser.</p>
-      <Button className="primary" onClick={() => replaceDraft(dialog === 'sample' ? sampleDraft : {title: '', scenes: [freshScene()]})}>
-        {dialog === 'new' ? 'New project' : 'Load sample'}
-      </Button>
-    </Modal>
-    <Modal opened={dialog === 'export'} onClose={() => setDialog(undefined)} title="Export video" centered>
-      <div aria-live="polite" className="export-status">
-        <strong>{job?.phase}</strong>
-        {running && <Progress value={job?.phase === 'Rendering video' ? (job?.progress ?? 0) * 100 : 18} color="lime" animated striped={job?.phase !== 'Rendering video'} />}
-        {job?.phase === 'Failed' && <Alert color="red" icon={<Info size={16} />}>{job.error}</Alert>}
-        {videoUrl && <>
-          <video className="export-video" src={videoUrl} controls playsInline preload="metadata" />
-          <Button component="a" className="primary" href={videoUrl} download="short.mp4" leftSection={<ArrowDownToLine size={16} />}>Download MP4</Button>
-        </>}
-      </div>
-    </Modal>
-  </div>;
+          <section className="panel inspector" aria-label="Scene settings">
+            <div className="panel-heading">
+              <div>
+                <span className="inspector-number">{String(index + 1).padStart(2, '0')}</span>{' '}
+                <h2>Scene details</h2>
+              </div>
+              <SceneActions
+                index={index}
+                total={draft.scenes.length}
+                move={moveScene}
+                remove={() => {
+                  const remainder = draft.scenes.filter((s) => s.id !== scene.id);
+                  if (!remainder.length) return;
+                  setSelectedId(remainder[Math.min(index, remainder.length - 1)].id);
+                  setDraft({...draft, scenes: remainder});
+                }}
+              />
+            </div>
+            <div className="inspector-body">
+              <TextInput
+                label="Scene name"
+                value={scene.name}
+                maxLength={85}
+                onChange={(event) => patchScene(scene.id, {name: event.currentTarget.value})}
+              />
+              <div className="field-block">
+                <div className="field-title">
+                  <span>
+                    <Film size={15} /> Visual
+                  </span>
+                  {scene.media && (
+                    <Button
+                      size="compact-xs"
+                      variant="subtle"
+                      color="gray"
+                      onClick={() => visualPicker.current?.click()}
+                    >
+                      Replace
+                    </Button>
+                  )}
+                </div>
+                <button
+                  className={`upload-target ${dragging ? 'dragging' : ''}`}
+                  type="button"
+                  onClick={() => visualPicker.current?.click()}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setDragging(false);
+                    chooseVisual(event.dataTransfer.files[0]);
+                  }}
+                >
+                  {scene.media ? (
+                    <Thumbnail scene={scene} />
+                  ) : (
+                    <span className="upload-icon">
+                      <Upload size={17} />
+                    </span>
+                  )}
+                  <span>
+                    <strong>{scene.media?.name ?? 'Choose or drop a file'}</strong>
+                    <small>
+                      {scene.media?.kind === 'video'
+                        ? 'MP4 clip'
+                        : scene.media
+                          ? 'Still image'
+                          : 'Image or MP4'}
+                    </small>
+                  </span>
+                </button>
+                <input
+                  type="file"
+                  hidden
+                  ref={visualPicker}
+                  accept="image/*,video/mp4,.mp4"
+                  aria-label="Scene visual file"
+                  onChange={(event) => {
+                    chooseVisual(event.target.files?.[0]);
+                    event.target.value = '';
+                  }}
+                />
+              </div>
+              <div className="field-block narration">
+                <Textarea
+                  label={
+                    <span className="field-label">
+                      <Mic size={15} /> Narration
+                    </span>
+                  }
+                  placeholder="Type the words you want spoken…"
+                  value={scene.narration}
+                  minRows={4}
+                  autosize
+                  maxRows={8}
+                  maxLength={4000}
+                  onChange={(event) =>
+                    patchScene(scene.id, {
+                      narration: event.currentTarget.value,
+                      voice: undefined,
+                      seconds: undefined,
+                      captions: undefined,
+                    })
+                  }
+                />
+                <div className="narration-actions">
+                  <span>
+                    {scene.voice ? (
+                      <>
+                        <Check size={13} /> Voice ready
+                      </>
+                    ) : (
+                      'Kokoro · Heart'
+                    )}
+                  </span>
+                  <Button
+                    loading={voiceScene === scene.id}
+                    disabled={!scene.narration.trim() || !!voiceScene || running}
+                    leftSection={<AudioLines size={14} />}
+                    size="compact-sm"
+                    variant="default"
+                    onClick={() => void generateVoice()}
+                  >
+                    {scene.voice ? 'Regenerate voice' : 'Generate voice'}
+                  </Button>
+                </div>
+              </div>
+              <details className="caption-panel">
+                <summary>
+                  Captions{' '}
+                  <span>
+                    {captionsFor(scene).length} cues <ChevronDown size={13} />
+                  </span>
+                </summary>
+                {!scene.voice && <p>Generate narration before editing caption timing.</p>}
+                {scene.voice &&
+                  captionsFor(scene).map((cue, i, cues) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: Caption slots stay in order, and their text and timing are editable.
+                    <div className="caption-edit" key={i}>
+                      <TextInput
+                        aria-label={`Caption ${i + 1}`}
+                        value={cue.text}
+                        error={!cue.text.trim()}
+                        onChange={(event) => {
+                          const text = event.currentTarget.value;
+                          patchScene(scene.id, {
+                            captions: cues.map((item, j) => (j === i ? {...item, text} : item)),
+                          });
+                        }}
+                      />
+                      <div>
+                        {(['start', 'end'] as const).map((edge) => (
+                          <NumberInput
+                            key={edge}
+                            label={edge === 'start' ? 'Start (s)' : 'End (s)'}
+                            aria-label={`Caption ${i + 1} ${edge}`}
+                            error={cue.end <= cue.start}
+                            decimalScale={2}
+                            step={0.05}
+                            min={0}
+                            max={secondsFor(scene) + 0.1}
+                            value={cue[edge]}
+                            onChange={(value) => {
+                              if (typeof value === 'number')
+                                patchScene(scene.id, {
+                                  captions: cues.map((item, j) =>
+                                    j === i ? {...item, [edge]: value} : item,
+                                  ),
+                                });
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+              </details>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <Modal
+        opened={dialog === 'script'}
+        onClose={() => setDialog(undefined)}
+        title="Paste a script"
+        centered
+      >
+        <Textarea
+          label="One scene per paragraph"
+          placeholder="Paste your narration here…"
+          value={script}
+          minRows={7}
+          onChange={(event) => setScript(event.currentTarget.value)}
+        />
+        <p className="modal-note">
+          This replaces the current scenes. Attach a visual to each new scene before exporting.
+        </p>
+        <Button className="primary" disabled={!script.trim()} onClick={importScript}>
+          Create scenes
+        </Button>
+      </Modal>
+      <Modal
+        opened={dialog === 'new' || dialog === 'sample'}
+        onClose={() => setDialog(undefined)}
+        title={dialog === 'new' ? 'Start a new project?' : 'Load the sample project?'}
+        centered
+      >
+        <p className="modal-note">This replaces the draft saved in this browser.</p>
+        <Button
+          className="primary"
+          onClick={() =>
+            replaceDraft(dialog === 'sample' ? sampleDraft : {title: '', scenes: [freshScene()]})
+          }
+        >
+          {dialog === 'new' ? 'New project' : 'Load sample'}
+        </Button>
+      </Modal>
+      <Modal opened={dialog === 'export'} onClose={() => setDialog(undefined)} title="Export video" centered>
+        <div aria-live="polite" className="export-status">
+          <strong>{job?.phase}</strong>
+          {running && (
+            <Progress
+              value={job?.phase === 'Rendering video' ? (job?.progress ?? 0) * 100 : 18}
+              color="lime"
+              animated
+              striped={job?.phase !== 'Rendering video'}
+            />
+          )}
+          {job?.phase === 'Failed' && (
+            <Alert color="red" icon={<Info size={16} />}>
+              {job.error}
+            </Alert>
+          )}
+          {videoUrl && (
+            <>
+              {/* biome-ignore lint/a11y/useMediaCaption: Remotion burns captions into the exported video. */}
+              <video className="export-video" src={videoUrl} controls playsInline preload="metadata" />
+              <Button
+                component="a"
+                className="primary"
+                href={videoUrl}
+                download="short.mp4"
+                leftSection={<ArrowDownToLine size={16} />}
+              >
+                Download MP4
+              </Button>
+            </>
+          )}
+        </div>
+      </Modal>
+    </div>
+  );
 }
 
-createRoot(document.getElementById('root')!).render(<MantineProvider theme={theme} forceColorScheme="dark"><Studio /></MantineProvider>);
+const root = document.getElementById('root');
+if (!root) throw new Error('Missing Short Studio root element.');
+createRoot(root).render(
+  <MantineProvider theme={theme} forceColorScheme="dark">
+    <Studio />
+  </MantineProvider>,
+);

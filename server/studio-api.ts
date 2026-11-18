@@ -14,11 +14,16 @@ import {buildStoryboard, generateNarration, readStoryboard} from '../src/storybo
 const maxUpload = 256 * 1024 * 1024;
 const requestSchema = z.object({
   title: z.string().trim().min(1).max(200),
-  scenes: z.array(z.object({
-    narration: z.string().trim().min(1).max(4000),
-    kind: z.enum(['image', 'video']),
-    captions: z.array(captionSchema).optional(),
-  })).min(1).max(100),
+  scenes: z
+    .array(
+      z.object({
+        narration: z.string().trim().min(1).max(4000),
+        kind: z.enum(['image', 'video']),
+        captions: z.array(captionSchema).optional(),
+      }),
+    )
+    .min(1)
+    .max(100),
 });
 type Job = {
   phase: 'Preparing scenes' | 'Rendering video' | 'Complete' | 'Failed';
@@ -41,7 +46,8 @@ function uploadPart(form: FormData, key: string) {
 async function parseUpload(req: IncomingMessage) {
   const type = req.headers['content-type'];
   if (!type?.startsWith('multipart/form-data;')) throw new Error('Expected a multipart export.');
-  if (Number(req.headers['content-length']) > maxUpload) throw new Error('Exports support up to 256 MB of uploaded media.');
+  if (Number(req.headers['content-length']) > maxUpload)
+    throw new Error('Exports support up to 256 MB of uploaded media.');
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req.iterator({destroyOnReturn: false})) {
@@ -68,7 +74,11 @@ async function serveVideo(req: IncomingMessage, res: ServerResponse, path: strin
     res.end();
     return;
   }
-  res.writeHead(206, {...headers, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': end - start + 1});
+  res.writeHead(206, {
+    ...headers,
+    'Content-Range': `bytes ${start}-${end}/${size}`,
+    'Content-Length': end - start + 1,
+  });
   createReadStream(path, {start, end}).pipe(res);
 }
 
@@ -98,7 +108,7 @@ async function queueExport(form: FormData, job: Job, id: string) {
   }
 
   const storyboard = join(directory, 'storyboard.json');
-  await writeFile(storyboard, JSON.stringify({title, scenes: source}, null, 2) + '\n');
+  await writeFile(storyboard, `${JSON.stringify({title, scenes: source}, null, 2)}\n`);
   let music: 'music.wav' | undefined;
   if (form.has('music')) {
     const track = uploadPart(form, 'music');
@@ -108,10 +118,15 @@ async function queueExport(form: FormData, job: Job, id: string) {
     await toWav(input, join(assets, music));
     await rm(input);
   }
-  const project = projectSchema.parse({...await buildStoryboard(await readStoryboard(storyboard), directory, prepared), music});
-  await writeFile(join(directory, 'project.json'), JSON.stringify(project, null, 2) + '\n');
+  const project = projectSchema.parse({
+    ...(await buildStoryboard(await readStoryboard(storyboard), directory, prepared)),
+    music,
+  });
+  await writeFile(join(directory, 'project.json'), `${JSON.stringify(project, null, 2)}\n`);
   job.phase = 'Rendering video';
-  job.file = await renderShort(directory, (progress) => {job.progress = progress;});
+  job.file = await renderShort(directory, (progress) => {
+    job.progress = progress;
+  });
   job.progress = 1;
   job.phase = 'Complete';
 }
@@ -125,14 +140,17 @@ export function studioApi(): Plugin {
     const path = req.url?.split('?')[0] ?? '';
     if (!path.startsWith('/api/studio/')) return next();
     const host = req.headers.host ?? '';
-    if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host) ||
-        (req.headers.origin && req.headers.origin !== `http://${host}`)) {
+    if (
+      !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host) ||
+      (req.headers.origin && req.headers.origin !== `http://${host}`)
+    ) {
       return json(res, 403, {error: 'Open Short Studio using its local address.'});
     }
 
     try {
       if (req.method === 'POST') {
-        if (req.headers['x-short-studio'] !== '1') return json(res, 403, {error: 'Studio request header missing.'});
+        if (req.headers['x-short-studio'] !== '1')
+          return json(res, 403, {error: 'Studio request header missing.'});
         if (path === '/api/studio/voice') {
           if (narrating || rendering) return json(res, 409, {error: 'Another generation is running.'});
           narrating = true;
@@ -145,7 +163,9 @@ export function studioApi(): Plugin {
               if (size > 20_000) throw new Error('Narration is too long.');
               chunks.push(chunk);
             }
-            const {narration} = z.object({narration: z.string().trim().min(1).max(4000)}).parse(JSON.parse(Buffer.concat(chunks).toString()));
+            const {narration} = z
+              .object({narration: z.string().trim().min(1).max(4000)})
+              .parse(JSON.parse(Buffer.concat(chunks).toString()));
             directory = await mkdtemp(join(tmpdir(), 'short-studio-'));
             await generateNarration([{index: 1, narration}], directory, directory);
             const audio = await readFile(join(directory, 'scene-1.wav'));
@@ -164,10 +184,14 @@ export function studioApi(): Plugin {
             const id = randomUUID();
             const job: Job = {phase: 'Preparing scenes', progress: 0};
             jobs.set(id, job);
-            void queueExport(form, job, id).catch((error: unknown) => {
-              job.phase = 'Failed';
-              job.error = error instanceof Error ? error.message : String(error);
-            }).finally(() => {rendering = false;});
+            void queueExport(form, job, id)
+              .catch((error: unknown) => {
+                job.phase = 'Failed';
+                job.error = error instanceof Error ? error.message : String(error);
+              })
+              .finally(() => {
+                rendering = false;
+              });
             return json(res, 202, {id});
           } catch (error) {
             rendering = false;
@@ -184,14 +208,19 @@ export function studioApi(): Plugin {
       }
       return json(res, 404, {error: 'Studio resource not found.'});
     } catch (error) {
-      if (!res.headersSent) return json(res, 400, {error: error instanceof Error ? error.message : String(error)});
+      if (!res.headersSent)
+        return json(res, 400, {error: error instanceof Error ? error.message : String(error)});
       res.end();
     }
   };
 
   return {
     name: 'short-studio-api',
-    configureServer(server) {server.middlewares.use(handle);},
-    configurePreviewServer(server) {server.middlewares.use(handle);},
+    configureServer(server) {
+      server.middlewares.use(handle);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(handle);
+    },
   };
 }

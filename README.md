@@ -13,6 +13,12 @@ pnpm install --frozen-lockfile
 
 The first render may download Remotion's headless browser.
 
+## Code checks
+
+Run `pnpm check` for Biome linting, import organisation, formatting checks, and TypeScript type checking. Use `pnpm lint` to run only the linter or `pnpm format` to format files in place. Run `pnpm exec biome check --write .` to also organise imports and apply safe fixes.
+
+Biome uses its recommended rules and enforces React hook checks, type-only imports, unused code checks, and explicit `node:` imports. Generated output, render caches, and local model files are excluded.
+
 ## Open Short Studio
 
 ```sh

@@ -9,17 +9,23 @@ const localPath = z.string().trim().min(1);
 const narration = z.string().trim().min(1);
 const storyboardSchema = z.object({
   title: z.string().trim().min(1),
-  scenes: z.array(z.union([
-    z.object({narration, image: localPath, video: z.never().optional()}),
-    z.object({narration, video: localPath, image: z.never().optional()}),
-  ])).min(1),
+  scenes: z
+    .array(
+      z.union([
+        z.object({narration, image: localPath, video: z.never().optional()}),
+        z.object({narration, video: localPath, image: z.never().optional()}),
+      ]),
+    )
+    .min(1),
 });
 
 export async function readStoryboard(path: string) {
   const board = storyboardSchema.parse(JSON.parse(await readFile(path, 'utf8')));
-  const scenes = board.scenes.map((scene) => scene.video !== undefined
-    ? {...scene, video: resolve(dirname(path), scene.video)}
-    : {...scene, image: resolve(dirname(path), scene.image)});
+  const scenes = board.scenes.map((scene) =>
+    scene.video !== undefined
+      ? {...scene, video: resolve(dirname(path), scene.video)}
+      : {...scene, image: resolve(dirname(path), scene.image)},
+  );
   for (const [index, scene] of scenes.entries()) {
     const visual = scene.video ?? scene.image;
     try {
@@ -70,9 +76,14 @@ export async function buildStoryboard(
   prepared: {voice?: string; captions?: Scene['captions']}[] = [],
 ): Promise<Project> {
   const assets = join(directory, 'assets');
-  await writeFile(join(directory, 'storyboard.json'), JSON.stringify(board, null, 2) + '\n');
-  await generateNarration(board.scenes.flatMap(({narration}, index) =>
-    prepared[index]?.voice ? [] : [{narration, index: index + 1}]), directory, assets);
+  await writeFile(join(directory, 'storyboard.json'), `${JSON.stringify(board, null, 2)}\n`);
+  await generateNarration(
+    board.scenes.flatMap(({narration}, index) =>
+      prepared[index]?.voice ? [] : [{narration, index: index + 1}],
+    ),
+    directory,
+    assets,
+  );
   const scenes: Project['scenes'] = [];
   for (const [index, scene] of board.scenes.entries()) {
     const id = `scene-${index + 1}`;

@@ -1,6 +1,15 @@
 import {
-  AbsoluteFill, Audio, Composition, Img, interpolate, OffthreadVideo, registerRoot,
-  Sequence, staticFile, useCurrentFrame, useVideoConfig,
+  AbsoluteFill,
+  Audio,
+  Composition,
+  Img,
+  interpolate,
+  OffthreadVideo,
+  registerRoot,
+  Sequence,
+  staticFile,
+  useCurrentFrame,
+  useVideoConfig,
 } from 'remotion';
 import {FPS, type Project, type Scene} from './project.ts';
 
@@ -16,26 +25,46 @@ function Slide({scene, index}: {scene: Scene; index: number}) {
   return (
     <AbsoluteFill style={{backgroundColor: '#0b0d15', overflow: 'hidden'}}>
       {scene.video ? (
-        <OffthreadVideo muted src={staticFile(scene.video)} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+        <OffthreadVideo
+          muted
+          src={staticFile(scene.video)}
+          style={{width: '100%', height: '100%', objectFit: 'cover'}}
+        />
       ) : (
         <AbsoluteFill style={{transform: `translateX(${translate}px) scale(${scale})`}}>
           {scene.image ? (
             <Img src={staticFile(scene.image)} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
           ) : (
-            <AbsoluteFill style={{background: 'radial-gradient(ellipse at 50% 39%, #03050c 11%, #241842 15%, #d47953 17%, #592f67 23%, #101731 43%, #03050c 72%)'}} />
+            <AbsoluteFill
+              style={{
+                background:
+                  'radial-gradient(ellipse at 50% 39%, #03050c 11%, #241842 15%, #d47953 17%, #592f67 23%, #101731 43%, #03050c 72%)',
+              }}
+            />
           )}
         </AbsoluteFill>
       )}
       <AbsoluteFill style={{background: 'linear-gradient(transparent 47%, #04050d60 70%, #04050de8 100%)'}} />
       <Audio src={staticFile(scene.audio)} />
       {caption && (
-        <div style={{
-          position: 'absolute', bottom: 352, left: 80, right: 144, textAlign: 'left',
-          color: index === 0 ? '#ffdfa0' : '#fff', fontFamily: 'Helvetica Neue, Arial, sans-serif',
-          fontWeight: 850, fontSize: index === 0 ? 87 : 74, letterSpacing: -2,
-          lineHeight: 1.02, textWrap: 'balance', textShadow: '0 3px 10px #03050c, 0 0 28px #03050c',
-          transform: `translateY(${captionRise}px)`,
-        }}>
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 352,
+            left: 80,
+            right: 144,
+            textAlign: 'left',
+            color: index === 0 ? '#ffdfa0' : '#fff',
+            fontFamily: 'Helvetica Neue, Arial, sans-serif',
+            fontWeight: 850,
+            fontSize: index === 0 ? 87 : 74,
+            letterSpacing: -2,
+            lineHeight: 1.02,
+            textWrap: 'balance',
+            textShadow: '0 3px 10px #03050c, 0 0 28px #03050c',
+            transform: `translateY(${captionRise}px)`,
+          }}
+        >
           {caption.text}
         </div>
       )}
@@ -48,9 +77,14 @@ function Short({scenes, music}: Project) {
   let start = 0;
   return (
     <AbsoluteFill>
-      {music && <Audio src={staticFile(music)} loop loopVolumeCurveBehavior="extend" volume={(frame) => (
-        0.13 * Math.max(0, Math.min(1, frame / 15, (durationInFrames - frame) / 24))
-      )} />}
+      {music && (
+        <Audio
+          src={staticFile(music)}
+          loop
+          loopVolumeCurveBehavior="extend"
+          volume={(frame) => 0.13 * Math.max(0, Math.min(1, frame / 15, (durationInFrames - frame) / 24))}
+        />
+      )}
       {scenes.map((scene, index) => {
         const from = start;
         start += scene.frames;
@@ -74,7 +108,10 @@ registerRoot(() => (
     durationInFrames={FPS}
     defaultProps={{title: '', scenes: []}}
     calculateMetadata={({props}) => ({
-      durationInFrames: Math.max(1, props.scenes.reduce((sum, scene) => sum + scene.frames, 0)),
+      durationInFrames: Math.max(
+        1,
+        props.scenes.reduce((sum, scene) => sum + scene.frames, 0),
+      ),
     })}
   />
 ));

@@ -8,10 +8,15 @@ import {narrationCaptions, type Project} from './project.ts';
 
 const boardSchema = z.object({
   title: z.string().trim().min(1),
-  scenes: z.array(z.object({
-    narration: z.string().trim().min(1),
-    imagePrompt: z.string().trim().min(1),
-  })).min(1).max(8),
+  scenes: z
+    .array(
+      z.object({
+        narration: z.string().trim().min(1),
+        imagePrompt: z.string().trim().min(1),
+      }),
+    )
+    .min(1)
+    .max(8),
 });
 
 export function paidProvider() {
@@ -44,9 +49,11 @@ export async function buildPaidShort(
   const voiceModel = process.env.VOICE_MODEL?.trim() || (official ? 'gpt-4o-mini-tts' : '');
   const voice = process.env.VOICE?.trim() || (official ? 'onyx' : '');
   if (!scriptModel || (!planOnly && (!imageModel || !voiceModel || !voice))) {
-    throw new Error(planOnly
-      ? 'Set SCRIPT_MODEL for this provider.'
-      : 'Set SCRIPT_MODEL, IMAGE_MODEL, VOICE_MODEL, and VOICE for this provider. Use --plan-only for a text-only provider.');
+    throw new Error(
+      planOnly
+        ? 'Set SCRIPT_MODEL for this provider.'
+        : 'Set SCRIPT_MODEL, IMAGE_MODEL, VOICE_MODEL, and VOICE for this provider. Use --plan-only for a text-only provider.',
+    );
   }
 
   console.log(`Paid requests to ${endpoint.origin} · writing storyboard`);
@@ -76,10 +83,17 @@ export async function buildPaidShort(
   }
   const board = boardSchema.parse(parsed);
   const storyboardFile = join(directory, 'storyboard.json');
-  await writeFile(storyboardFile, JSON.stringify({
-    title: board.title,
-    scenes: board.scenes.map((scene, index) => ({...scene, image: `assets/scene-${index + 1}.jpg`})),
-  }, null, 2) + '\n');
+  await writeFile(
+    storyboardFile,
+    `${JSON.stringify(
+      {
+        title: board.title,
+        scenes: board.scenes.map((scene, index) => ({...scene, image: `assets/scene-${index + 1}.jpg`})),
+      },
+      null,
+      2,
+    )}\n`,
+  );
   if (planOnly) return storyboardFile;
 
   const assets = join(directory, 'assets');
@@ -95,11 +109,13 @@ export async function buildPaidShort(
       model: imageModel,
       prompt: `${scene.imagePrompt} Cinematic portrait framing with the subject in the central 80%. No text or logos.`,
       ...(process.env.IMAGE_SIZE?.trim() ? {size: process.env.IMAGE_SIZE.trim()} : {}),
-      ...(official && imageModel.startsWith('gpt-image') ? {
-        size: process.env.IMAGE_SIZE?.trim() || '1024x1536',
-        quality: 'medium',
-        output_format: 'jpeg',
-      } : {}),
+      ...(official && imageModel.startsWith('gpt-image')
+        ? {
+            size: process.env.IMAGE_SIZE?.trim() || '1024x1536',
+            quality: 'medium',
+            output_format: 'jpeg',
+          }
+        : {}),
     });
     const generated = result.data?.[0];
     if (generated?.b64_json) {
@@ -120,9 +136,12 @@ export async function buildPaidShort(
       voice,
       input: scene.narration,
       response_format: 'wav',
-      ...(official && voiceModel.startsWith('gpt-4o-mini-tts') ? {
-        instructions: 'Speak like a curious documentary host. Use natural phrasing and emphasis, with a conversational pace.',
-      } : {}),
+      ...(official && voiceModel.startsWith('gpt-4o-mini-tts')
+        ? {
+            instructions:
+              'Speak like a curious documentary host. Use natural phrasing and emphasis, with a conversational pace.',
+          }
+        : {}),
     });
     await writeFile(temporarySpeech, Buffer.from(await speech.arrayBuffer()));
     await normalizeSpeech(temporarySpeech, join(assets, audio));
