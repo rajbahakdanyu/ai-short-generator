@@ -586,7 +586,7 @@ function Studio() {
           </section>
 
           <section className="center" aria-label="Preview and timeline">
-            <Preview key={scene.id} scene={scene} number={index + 1} />
+            <Preview scenes={draft.scenes} selectedIndex={index} music={draft.music} />
             <div className="timeline panel">
               <div className="timeline-head">
                 <span>

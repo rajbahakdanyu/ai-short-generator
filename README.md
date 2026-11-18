@@ -29,6 +29,7 @@ Open [Short Studio](http://127.0.0.1:5173/). The bundled black-hole project open
 
 - Add, rename, reorder, or delete scenes. Drop a still image or MP4 into each scene's **Visual** field.
 - Use **Generate voice** to hear the scene locally and edit caption text and timing in **Captions**. Install Kokoro with `pnpm setup:voice` if it is missing. The bundled sample can preview and export without installing Kokoro.
+- Select **Full Short** in the preview to play and scrub across scenes, or **Scene** to focus on the selected shot. The preview plays available narration and the optional soundtrack.
 - Use **Export MP4** to render and download the video. The saved project and MP4 live under `output/studio-*/`. An optional soundtrack is mixed during export.
 
 **Project → Open project folder** opens a folder containing `storyboard.json` or a prepared `project.json` and `assets/`. For a prepared project, Studio reuses the narration, captions, and scene lengths when exporting. For a storyboard, put the referenced stills and clips inside the selected folder.

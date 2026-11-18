@@ -1,6 +1,6 @@
-import {ActionIcon, Slider} from '@mantine/core';
+import {ActionIcon, SegmentedControl, Slider} from '@mantine/core';
 import {Captions, Film, Maximize, Pause, Play, SkipBack} from 'lucide-react';
-import {useEffect, useRef, useState} from 'react';
+import {type RefObject, useEffect, useMemo, useRef, useState} from 'react';
 import {type Asset, assetUrl, captionsFor, type DraftScene, formatTime, secondsFor} from './model.ts';
 
 export function useAsset(asset?: Asset) {
@@ -29,75 +29,141 @@ export function Thumbnail({scene}: {scene: DraftScene}) {
   );
 }
 
-export function Preview({scene, number}: {scene: DraftScene; number: number}) {
-  const media = useAsset(scene.media);
-  const voice = useAsset(scene.voice);
+function syncTime(element: HTMLMediaElement, seconds: number, playing: boolean) {
+  if (!element.readyState || element.seeking) return;
+  const duration = element.duration;
+  if (!Number.isFinite(duration) || duration <= 0) return;
+  const desired = element.loop ? seconds % duration : Math.min(seconds, duration);
+  if (Math.abs(element.currentTime - desired) > (playing ? 0.16 : 0.005)) {
+    element.currentTime = desired;
+  }
+}
+
+function usePlayback(
+  ref: RefObject<HTMLMediaElement | null>,
+  source: string | undefined,
+  seconds: number,
+  playing: boolean,
+) {
+  useEffect(() => {
+    const element = source ? ref.current : null;
+    if (element && playing) void element.play().catch(() => {});
+    return () => element?.pause();
+  }, [source, playing, ref]);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (element) syncTime(element, seconds, playing);
+  }, [seconds, playing, ref]);
+}
+
+export function Preview({
+  scenes,
+  selectedIndex,
+  music,
+}: {
+  scenes: DraftScene[];
+  selectedIndex: number;
+  music?: Asset;
+}) {
   const audio = useRef<HTMLAudioElement>(null);
   const video = useRef<HTMLVideoElement>(null);
+  const soundtrack = useRef<HTMLAudioElement>(null);
   const stage = useRef<HTMLDivElement>(null);
+  const [scope, setScope] = useState<'full' | 'scene'>('full');
   const [playing, setPlaying] = useState(false);
   const [captions, setCaptions] = useState(true);
   const [position, setPosition] = useState(0);
   const current = useRef(0);
-  const duration = secondsFor(scene);
+
+  const timeline = useMemo(() => {
+    let cursor = 0;
+    return scenes.map((scene) => {
+      const start = cursor;
+      cursor += secondsFor(scene);
+      return {start, end: cursor, scene};
+    });
+  }, [scenes]);
+  const selected = timeline[selectedIndex];
+  const duration = scope === 'full' ? timeline[timeline.length - 1].end : selected.end - selected.start;
+  const playhead = Math.min(position, duration);
+  const active = scope === 'full' ? timeline.findIndex(({end}) => end > playhead) : selectedIndex;
+  const number = (active < 0 ? timeline.length - 1 : active) + 1;
+  const shot = timeline[number - 1];
+  const scene = shot.scene;
+  const localTime = scope === 'full' ? Math.max(0, playhead - shot.start) : playhead;
+  const musicTime = scope === 'full' ? playhead : selected.start + playhead;
+  const selectedId = selected.scene.id;
+  const start = scope === 'full' ? selected.start : 0;
+  const media = useAsset(scene.media);
+  const voice = useAsset(scene.voice);
+  const track = useAsset(music);
+  const clipSource = scene.media?.kind === 'video' ? media : undefined;
 
   function seek(seconds: number) {
     current.current = seconds;
     setPosition(seconds);
-    if (audio.current?.readyState) audio.current.currentTime = seconds;
-    if (video.current?.duration) video.current.currentTime = seconds % video.current.duration;
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Changing the media, voice, or duration resets playback.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Replacing the selected scene at the same timeline position resets playback.
   useEffect(() => {
-    current.current = 0;
-    setPosition(0);
     setPlaying(false);
-    if (audio.current?.readyState) audio.current.currentTime = 0;
-    if (video.current?.readyState) video.current.currentTime = 0;
-  }, [media, voice, duration]);
+    current.current = start;
+    setPosition(start);
+  }, [start, scope, selectedId]);
 
   useEffect(() => {
-    const sound = voice ? audio.current : null;
-    const clip = media ? video.current : null;
-    if (!playing) {
-      sound?.pause();
-      clip?.pause();
-      return;
-    }
-    void sound?.play().catch(() => setPlaying(false));
-    void clip?.play().catch(() => {});
+    if (!playing) return;
     let previous = performance.now();
     let request = 0;
     const tick = (now: number) => {
-      const seconds = sound ? sound.currentTime : current.current + (now - previous) / 1000;
+      current.current = Math.min(current.current + (now - previous) / 1000, duration);
       previous = now;
-      current.current = Math.min(seconds, duration);
       setPosition(current.current);
-      if (seconds >= duration || sound?.ended) setPlaying(false);
-      else request = requestAnimationFrame(tick);
+      if (current.current < duration) request = requestAnimationFrame(tick);
+      else setPlaying(false);
     };
     request = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(request);
-      sound?.pause();
-      clip?.pause();
-    };
-  }, [playing, duration, media, voice]);
+    return () => cancelAnimationFrame(request);
+  }, [playing, duration]);
 
-  const progress = position / duration;
+  usePlayback(video, clipSource, localTime, playing);
+  usePlayback(audio, voice, localTime, playing);
+  usePlayback(soundtrack, track, musicTime, playing);
+
+  function togglePlayback() {
+    if (playing) {
+      setPlaying(false);
+      return;
+    }
+    if (playhead >= duration) seek(0);
+    void audio.current?.play().catch(() => {});
+    void soundtrack.current?.play().catch(() => {});
+    setPlaying(true);
+  }
+
+  const progress = localTime / (shot.end - shot.start);
   const pushIn = number % 2 === 1;
   const scale = pushIn ? 1.05 + 0.13 * progress : 1.18 - 0.13 * progress;
   const slide = (pushIn ? -1 : 1) * (1.8 - 2.9 * progress);
   const text =
-    captions && captionsFor(scene).find(({start, end}) => start <= position && position < end)?.text;
+    captions && captionsFor(scene).find(({start, end}) => start <= localTime && localTime < end)?.text;
   return (
     <div className="monitor">
       <div className="monitor-head">
         <div>
-          <span className="monitor-dot" /> Scene preview
+          <span className="monitor-dot" /> Preview
         </div>
-        <span className="aspect-label">9:16</span>
+        <SegmentedControl
+          size="xs"
+          aria-label="Preview scope"
+          data={[
+            {label: 'Full Short', value: 'full'},
+            {label: 'Scene', value: 'scene'},
+          ]}
+          value={scope}
+          onChange={(value) => setScope(value === 'scene' ? 'scene' : 'full')}
+        />
       </div>
       <div className="monitor-stage" ref={stage}>
         <div className="phone" key={media}>
@@ -109,7 +175,15 @@ export function Preview({scene, number}: {scene: DraftScene; number: number}) {
             />
           )}
           {media && scene.media?.kind === 'video' && (
-            <video ref={video} src={media} muted loop playsInline preload="metadata" />
+            <video
+              ref={video}
+              src={media}
+              muted
+              loop
+              playsInline
+              preload="auto"
+              onLoadedMetadata={(event) => syncTime(event.currentTarget, localTime, playing)}
+            />
           )}
           {!media && (
             <div className="empty-frame">
@@ -122,40 +196,63 @@ export function Preview({scene, number}: {scene: DraftScene; number: number}) {
               {text}
             </div>
           )}
-          <span className="scene-chip">SCENE {String(number).padStart(2, '0')}</span>
+          <span className="scene-chip">
+            SCENE {String(number).padStart(2, '0')}
+            {!scene.voice && scene.narration.trim() && ' · VOICE PENDING'}
+          </span>
         </div>
       </div>
       {voice && (
         // biome-ignore lint/a11y/useMediaCaption: The preview displays the same captions over the visual during narration.
-        <audio ref={audio} key={voice} src={voice} preload="auto" />
+        <audio
+          ref={audio}
+          src={voice}
+          preload="auto"
+          onLoadedMetadata={(event) => syncTime(event.currentTarget, localTime, playing)}
+        />
+      )}
+      {track && (
+        // biome-ignore lint/a11y/useMediaCaption: The optional soundtrack plays under the separately captioned narration.
+        <audio
+          ref={soundtrack}
+          src={track}
+          preload="auto"
+          loop
+          onLoadedMetadata={(event) => {
+            event.currentTarget.volume = 0.13;
+            syncTime(event.currentTarget, musicTime, playing);
+          }}
+        />
       )}
       <div className="transport">
-        <ActionIcon variant="subtle" color="gray" aria-label="Restart scene" onClick={() => seek(0)}>
+        <ActionIcon
+          variant="subtle"
+          color="gray"
+          aria-label={scope === 'full' ? 'Restart Short' : 'Restart scene'}
+          onClick={() => seek(0)}
+        >
           <SkipBack size={17} />
         </ActionIcon>
         <ActionIcon
           className="play-button"
           size={36}
-          aria-label={playing ? 'Pause scene' : 'Play scene'}
-          onClick={() => {
-            if (!playing && (position >= duration || audio.current?.ended)) seek(0);
-            setPlaying(!playing);
-          }}
+          aria-label={playing ? 'Pause preview' : scope === 'full' ? 'Play full Short' : 'Play scene'}
+          onClick={togglePlayback}
         >
           {playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
         </ActionIcon>
         <span className="timecode">
-          {formatTime(position)} <span>/ {formatTime(duration)}</span>
+          {formatTime(playhead)} <span>/ {formatTime(duration)}</span>
         </span>
         <Slider
           className="scrubber"
           min={0}
           max={duration}
           step={0.01}
-          value={position}
+          value={playhead}
           onChange={seek}
           label={null}
-          aria-label="Scene playback position"
+          aria-label={scope === 'full' ? 'Full Short playback position' : 'Scene playback position'}
           size="xs"
         />
         <ActionIcon
