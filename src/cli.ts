@@ -3,8 +3,9 @@ import {join, resolve} from 'node:path';
 import {parseArgs} from 'node:util';
 import {demoProject} from './demo.ts';
 import {run, toWav} from './media.ts';
-import {buildPaidShort, paidProvider} from './paid.ts';
+import {buildPaidShort} from './paid.ts';
 import {FPS, projectSchema} from './project.ts';
+import {paidProviders} from './providers/config.ts';
 import {renderShort} from './render.ts';
 import {buildStoryboard, readStoryboard} from './storyboard.ts';
 
@@ -49,7 +50,7 @@ async function main() {
   }
 
   const board = values.storyboard ? await readStoryboard(resolve(values.storyboard)) : undefined;
-  const provider = topic ? paidProvider() : undefined;
+  const provider = topic ? paidProviders(planOnly) : undefined;
   if (!planOnly) {
     await run('ffprobe', ['-version']);
     await run('ffmpeg', ['-version']);
@@ -73,7 +74,7 @@ async function main() {
   }
   const result =
     topic && provider
-      ? await buildPaidShort(provider, topic, directory, planOnly)
+      ? await buildPaidShort(provider, topic, directory)
       : board
         ? await buildStoryboard(board, directory)
         : await demoProject(assets, music);

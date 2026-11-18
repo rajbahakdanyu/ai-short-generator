@@ -80,25 +80,61 @@ pnpm generate --render output/your-project-directory
 pnpm check
 ```
 
-## Generate from a topic with a paid API
+## Generate from a topic with paid providers
 
-Copy `.env.example` to `.env` and set `OPENAI_API_KEY`. For a third-party OpenAI-compatible provider, set `OPENAI_BASE_URL` to its API base URL (often ending in `/v1`), use that provider’s key, and set `SCRIPT_MODEL`, `IMAGE_MODEL`, `VOICE_MODEL`, and `VOICE` to values it supports. Set `IMAGE_SIZE` if your provider requires a specific size.
+Copy `.env.example` to `.env`. Set `PAID_PROVIDER` to use a single provider for all three stages, or use `SCRIPT_PROVIDER`, `IMAGE_PROVIDER`, and `VOICE_PROVIDER` to mix providers. Stage settings take precedence. With no provider settings, the CLI uses the existing OpenAI defaults and `OPENAI_API_KEY`.
+
+For example, use OpenRouter for the storyboard, fal for the illustrations, and Kokoro on your Mac for narration:
+
+```dotenv
+SCRIPT_PROVIDER=openrouter
+OPENROUTER_API_KEY=your_openrouter_key
+SCRIPT_MODEL=anthropic/claude-sonnet-4.6
+
+IMAGE_PROVIDER=fal
+FAL_KEY=your_fal_key
+IMAGE_MODEL=xai/grok-imagine-image
+
+VOICE_PROVIDER=kokoro
+```
+
+Run `pnpm setup:voice` once for Kokoro, then generate the Short:
 
 ```sh
 pnpm generate --paid-topic "Why does the Moon look bigger near the horizon?"
 ```
 
-This explicitly opts into billable requests. The full paid workflow needs OpenAI-compatible Chat Completions, image generation (returning a URL or base64 image), and speech generation. Captions are estimated locally and Remotion renders the MP4 on your Mac. Add `--music path/to/track.mp3` to mix a local track into the export.
+### Providers by stage
 
-If your provider only supports Chat Completions, use `--plan-only`. Only script generation uses the API in that mode:
+| Provider value                                                                              | Stages               | API key / configuration                                                                                                                                     |
+| ------------------------------------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openai`                                                                                    | Script, image, voice | `OPENAI_API_KEY`                                                                                                                                            |
+| `openrouter`                                                                                | Script, image, voice | `OPENROUTER_API_KEY`. Select models listed for the respective Chat, Image, and Speech APIs.                                                                 |
+| `google`                                                                                    | Script, image, voice | `GOOGLE_API_KEY` or `GEMINI_API_KEY`. Use Gemini text, Gemini image or Imagen, and Gemini TTS models.                                                       |
+| `xai`                                                                                       | Script, image, voice | `XAI_API_KEY`. The native xAI speech endpoint uses `VOICE` as the voice ID.                                                                                 |
+| `azure`                                                                                     | Script, image, voice | `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_BASE_URL` ending in `/openai/v1`. Use deployment names and enable the relevant endpoint.                           |
+| `anthropic`                                                                                 | Script               | `ANTHROPIC_API_KEY`                                                                                                                                         |
+| `bedrock`                                                                                   | Script               | `AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`. Use a Converse model or inference profile ID.                                                                  |
+| `mistral`, `groq`, `deepseek`, `perplexity`, `fireworks`, `deepinfra`, `cerebras`, `cohere` | Script               | `MISTRAL_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `PERPLEXITY_API_KEY`, `FIREWORKS_API_KEY`, `DEEPINFRA_API_KEY`, `CEREBRAS_API_KEY`, `COHERE_API_KEY` |
+| `gateway`                                                                                   | Script               | `AI_GATEWAY_API_KEY` for Vercel AI Gateway                                                                                                                  |
+| `together`                                                                                  | Script, image        | `TOGETHER_API_KEY`                                                                                                                                          |
+| `fal`                                                                                       | Image                | `FAL_KEY` and a text-to-image endpoint ID returning an `images` array                                                                                       |
+| `replicate`                                                                                 | Image                | `REPLICATE_API_TOKEN` and a model ID in `owner/model` form returning an image URL                                                                           |
+| `elevenlabs`                                                                                | Voice                | `ELEVENLABS_API_KEY`, model ID, and voice ID                                                                                                                |
+| `kokoro`                                                                                    | Voice                | Local model installed with `pnpm setup:voice`                                                                                                               |
+| `compatible`                                                                                | Script, image, voice | An OpenAI-compatible API URL and key for the endpoints you use                                                                                              |
+
+Set `SCRIPT_MODEL`, `IMAGE_MODEL`, and `VOICE_MODEL` to models that support each stage. Set `VOICE` to the provider's voice name or ID for remote narration. Kokoro uses the bundled setup's Heart voice. The same OpenRouter or Google API key can cover multiple stages, with a different model for each.
+
+For custom endpoints, use `<STAGE>_BASE_URL` and `<STAGE>_API_KEY`, replacing `<STAGE>` with `SCRIPT`, `IMAGE`, or `VOICE`. Existing `OPENAI_BASE_URL` and `OPENAI_API_KEY` setups still work with the default provider. Image tuning accepts `IMAGE_SIZE` for compatible APIs, `IMAGE_ASPECT_RATIO` where supported, and optional JSON `IMAGE_OPTIONS` for model-specific parameters. OpenRouter speech defaults to MP3. Use `VOICE_FORMAT` for a compatible model's supported format.
+
+Add `--plan-only` to call only the script provider and write a storyboard with image prompts:
 
 ```sh
 pnpm generate --paid-topic "Why does the Moon look bigger near the horizon?" --plan-only
 ```
 
-The saved `storyboard.json` includes an illustration prompt and a target image path for each scene. Add your own images at those paths or edit the paths, then pass that JSON to `--storyboard` for local Kokoro narration and rendering.
-
-The CLI only reads paid API credentials when you pass `--paid-topic`. The storyboard, demo, and rerender commands make no paid API calls.
+Add your own images or MP4 clips to that storyboard and finish with `--storyboard`. The paid route currently generates still illustrations. Captions and rendering run locally in every mode. The local Studio, demo, storyboard, and rerender commands make no paid API calls.
 
 ### Demo illustration prompts
 

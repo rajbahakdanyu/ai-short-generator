@@ -37,12 +37,7 @@ export async function readStoryboard(path: string) {
   return {...board, scenes};
 }
 
-export async function generateNarration(
-  scenes: {index: number; narration: string}[],
-  directory: string,
-  assets: string,
-) {
-  if (!scenes.length) return;
+export async function kokoroRuntime() {
   const root = fileURLToPath(new URL('../', import.meta.url));
   const python = join(root, '.kokoro/venv/bin/python');
   try {
@@ -55,6 +50,16 @@ export async function generateNarration(
     throw new Error('Kokoro is missing. Run pnpm setup:voice from the project directory.');
   }
 
+  return {python, root};
+}
+
+export async function generateNarration(
+  scenes: {index: number; narration: string}[],
+  directory: string,
+  assets: string,
+) {
+  if (!scenes.length) return;
+  const {python, root} = await kokoroRuntime();
   const input = join(directory, 'narration-input.json');
   await writeFile(input, JSON.stringify({scenes}));
   try {
