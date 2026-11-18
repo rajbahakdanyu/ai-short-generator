@@ -1,13 +1,13 @@
 :root {
   color-scheme: dark;
-  --page: #111214;
-  --panel: #18191c;
-  --surface: #202125;
-  --line: #2d2e33;
+  --page: #141315;
+  --panel: #201e21;
+  --surface: #302c30;
+  --line: #403b40;
   --muted: #a0a2ab;
   --ink: #f3f3f4;
-  --accent: #d8fa70;
-  --accent-ink: #1d250e;
+  --accent: #ff9867;
+  --accent-ink: #271309;
   --display: "Space Grotesk Variable", sans-serif;
 }
 [data-mantine-color-scheme="dark"] {
@@ -82,10 +82,10 @@ summary:focus-visible {
   height: 7px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 10px #c8fc7050;
+  box-shadow: 0 0 10px #ff986730;
 }
 .project-menu {
-  background: #202125;
+  background: #302c30;
   border-color: var(--line);
 }
 .primary,
@@ -96,7 +96,7 @@ summary:focus-visible {
 }
 .primary:hover,
 .play-button:hover {
-  background: #e6ff9e;
+  background: #ffb48f;
   color: var(--accent-ink);
 }
 main {
@@ -241,8 +241,8 @@ main {
   background: var(--surface);
 }
 .scene-row.selected {
-  border-color: #d8fa7070;
-  background: linear-gradient(105deg, #2d3422, #232822);
+  border-color: #ff986770;
+  background: linear-gradient(105deg, #453027, #322825);
 }
 .thumbnail {
   flex: 0 0 auto;
@@ -373,7 +373,7 @@ main {
   padding: 17px;
   display: grid;
   place-items: center;
-  background: radial-gradient(ellipse, #24252a 0%, #151618 61%, #111214 100%);
+  background: radial-gradient(ellipse, #24252a 0%, #151618 61%, #141315 100%);
 }
 .monitor-stage:fullscreen {
   height: 100%;
@@ -537,7 +537,7 @@ main {
   height: 24px;
   border-radius: 5px;
   color: var(--accent);
-  background: #d8fa7017;
+  background: #ff986717;
   font: 700 12px var(--display);
 }
 .inspector-body {
@@ -597,7 +597,7 @@ main {
 .upload-target:hover,
 .upload-target.dragging {
   border-color: var(--accent);
-  background: #2a3024;
+  background: #392e29;
 }
 .upload-target .thumbnail {
   width: 35px;
@@ -703,6 +703,68 @@ main {
     opacity: 1;
     transform: translateY(0);
   }
+}
+/* The project slate, preview desk and filmstrip share a single editing surface. */
+.project-header {
+  padding: clamp(16px, 2vw, 30px);
+  border-radius: 12px;
+  border: 1px solid #52403b;
+  background: linear-gradient(108deg, #422d29, #2f2426 54%, #201e21);
+}
+.project-title > label {
+  text-transform: uppercase;
+  color: #ffac84;
+}
+.project-title input {
+  font-weight: 550;
+}
+.brand-icon {
+  transform: rotate(-5deg);
+}
+.monitor-stage {
+  background-color: #171618;
+  background-image: radial-gradient(#4a4145 0.8px, transparent 1px);
+  background-size: 10px 10px;
+}
+.center {
+  display: flex;
+  flex-direction: column;
+}
+.monitor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.monitor-stage {
+  flex: 1 0 auto;
+}
+.monitor-head {
+  height: 53px;
+}
+.scene-row {
+  align-items: center;
+  padding-block: 10px;
+}
+.scene-row .thumbnail {
+  width: 53px;
+  height: 68px;
+}
+.timeline {
+  margin-top: 15px;
+  padding: 15px;
+}
+.timeline-strip {
+  padding-top: 10px;
+  background: repeating-linear-gradient(90deg, #655b60 0 1px, transparent 1px 12px) top / 100% 4px no-repeat;
+}
+.timeline-strip button {
+  height: 58px;
+}
+.timeline-strip button > span:last-child {
+  max-width: calc(100% - 10px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 @media (max-width: 1030px) {
   main {

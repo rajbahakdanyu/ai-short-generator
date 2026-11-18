@@ -63,6 +63,7 @@ const PaidDialog = lazy(async () => ({default: (await import('./paid-dialog.tsx'
 const theme = createTheme({
   fontFamily: 'Inter Variable, system-ui, sans-serif',
   defaultRadius: 'md',
+  primaryColor: 'orange',
   respectReducedMotion: true,
 });
 
@@ -500,9 +501,7 @@ function Studio() {
       <main>
         <div className="project-header">
           <div className="project-title">
-            <label htmlFor="project-title">
-              <Layers size={15} /> STORYBOARD
-            </label>
+            <label htmlFor="project-title">Storyboard editor</label>
             <input
               id="project-title"
               aria-label="Project title"
@@ -542,7 +541,7 @@ function Studio() {
           <section className="panel scene-panel" aria-label="Storyboard scenes">
             <div className="panel-heading">
               <div>
-                <Layers size={16} /> <h2>Scenes</h2> <span className="count">{draft.scenes.length}</span>
+                <Layers size={16} /> <h2>Scene bin</h2> <span className="count">{draft.scenes.length}</span>
               </div>
               <Tooltip label="Add scene">
                 <ActionIcon variant="default" aria-label="Add scene" onClick={addScene}>
@@ -637,32 +636,6 @@ function Studio() {
               music={draft.music}
               musicVolume={draft.musicVolume}
             />
-            <div className="timeline panel">
-              <div className="timeline-head">
-                <span>
-                  <MonitorPlay size={15} /> Scene timeline
-                </span>
-                <strong>
-                  {draft.scenes.length} {draft.scenes.length === 1 ? 'scene' : 'scenes'}
-                </strong>
-              </div>
-              <div className="timeline-strip">
-                {draft.scenes.map((s, i) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    aria-label={`Preview scene ${i + 1}`}
-                    aria-pressed={s.id === scene.id}
-                    className={s.id === scene.id ? 'active' : ''}
-                    style={{flexGrow: secondsFor(s)}}
-                    onClick={() => setSelectedId(s.id)}
-                  >
-                    <Thumbnail scene={s} />
-                    <span>{String(i + 1).padStart(2, '0')}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
           </section>
 
           <SceneInspector
@@ -683,6 +656,34 @@ function Studio() {
             generateVoice={generateVoice}
             setError={setError}
           />
+        </div>
+        <div className="timeline panel">
+          <div className="timeline-head">
+            <span>
+              <MonitorPlay size={15} /> Scene timeline
+            </span>
+            <strong>
+              {draft.scenes.length} {draft.scenes.length === 1 ? 'scene' : 'scenes'}
+            </strong>
+          </div>
+          <div className="timeline-strip">
+            {draft.scenes.map((s, i) => (
+              <button
+                key={s.id}
+                type="button"
+                aria-label={`Preview scene ${i + 1}`}
+                aria-pressed={s.id === scene.id}
+                className={s.id === scene.id ? 'active' : ''}
+                style={{flexGrow: secondsFor(s)}}
+                onClick={() => setSelectedId(s.id)}
+              >
+                <Thumbnail scene={s} />
+                <span>
+                  {String(i + 1).padStart(2, '0')} · {s.name}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       </main>
 
@@ -891,7 +892,7 @@ function Studio() {
           {running && (
             <Progress
               value={(job?.progress ?? 0) * 100}
-              color="lime"
+              color="orange"
               animated
               striped={job?.phase !== 'Rendering video'}
             />
