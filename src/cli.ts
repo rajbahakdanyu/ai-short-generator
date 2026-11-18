@@ -49,7 +49,6 @@ async function main() {
       throw new Error('Set OPENAI_API_KEY in .env or run with --demo.');
     }
   }
-  if (values.demo && process.platform !== 'darwin') throw new Error('The demo requires macOS speech synthesis.');
   await run('ffprobe', ['-version']);
   if (values.demo || values.music) await run('ffmpeg', ['-version']);
 

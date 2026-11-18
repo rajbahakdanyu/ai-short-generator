@@ -1,6 +1,7 @@
-import {copyFile, rm} from 'node:fs/promises';
+import {copyFile} from 'node:fs/promises';
 import {join} from 'node:path';
-import {audioFrames, run} from './media.ts';
+import {fileURLToPath} from 'node:url';
+import {audioFrames, run, toWav} from './media.ts';
 import {FPS, type Project} from './project.ts';
 
 const shots = [
@@ -23,24 +24,16 @@ const shots = [
 ];
 
 export async function demoProject(assets: string, suppliedMusic?: Project['music']): Promise<Project> {
-  const {stdout: voices} = await run('say', ['-v', '?']);
-  const voice = voices.includes('Reed (English (US))') ? 'Reed (English (US))' : 'Daniel';
   const scenes: Project['scenes'] = [];
 
   for (const [index, {imagePrompt, phrases}] of shots.entries()) {
     const id = `scene-${index + 1}`;
     const image = `${id}.jpg`;
     const audio = `${id}.wav`;
-    const aiff = join(assets, `${id}.aiff`);
     const wav = join(assets, audio);
     const narration = phrases.join(' ');
     await copyFile(new URL(`../demo/${image}`, import.meta.url), join(assets, image));
-    await run('say', ['-v', voice, '-r', '184', '-o', aiff, narration]);
-    await run('ffmpeg', [
-      '-hide_banner', '-loglevel', 'error', '-nostdin', '-i', aiff,
-      '-af', 'highpass=f=75,loudnorm=I=-16:TP=-2:LRA=5', '-ar', '48000', wav,
-    ]);
-    await rm(aiff);
+    await toWav(fileURLToPath(new URL(`../demo/${id}.flac`, import.meta.url)), wav);
 
     const frames = await audioFrames(wav);
     // Weight phrases by length and allow extra time for spoken pauses.

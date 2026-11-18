@@ -19,7 +19,7 @@ The first render may download Remotion's headless browser.
 pnpm generate --demo
 ```
 
-The macOS demo uses four bundled black hole illustrations, system speech, estimated phrase-level caption timing, and a locally synthesized ambient bed. It makes no OpenAI calls.
+The demo uses four bundled black hole illustrations, bundled neural narration, estimated phrase-level caption timing, and a locally synthesized ambient bed. The narration was generated locally with [Kokoro ONNX](https://github.com/thewh1teagle/kokoro-onnx) using its `af_heart` voice. Running the demo requires neither the model files nor an API key.
 
 ## Generate from a topic
 
