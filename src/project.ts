@@ -34,3 +34,8 @@ export function estimatedCaptions(phrases: string[], frames: number): Scene['cap
     return {text, start, end};
   });
 }
+
+export function narrationCaptions(narration: string, frames: number): Scene['captions'] {
+  const phrases = narration.match(/[^\s]+(?:[ \t]+[^\s]+){0,4}/g) ?? [narration];
+  return estimatedCaptions(phrases, frames);
+}

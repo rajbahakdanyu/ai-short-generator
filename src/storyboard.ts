@@ -2,8 +2,8 @@ import {access, readFile, rm, writeFile} from 'node:fs/promises';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {z} from 'zod';
-import {audioFrames, run} from './media.ts';
-import {estimatedCaptions, type Project} from './project.ts';
+import {audioFrames, normalizeSpeech, run, toJpeg} from './media.ts';
+import {narrationCaptions, type Project} from './project.ts';
 
 const storyboardSchema = z.object({
   title: z.string().trim().min(1),
@@ -49,10 +49,7 @@ export async function buildStoryboard(
   const assets = join(directory, 'assets');
   await writeFile(input, JSON.stringify(board, null, 2) + '\n');
   for (const [index, scene] of board.scenes.entries()) {
-    await run('ffmpeg', [
-      '-v', 'error', '-nostdin', '-i', scene.image,
-      '-frames:v', '1', '-update', '1', '-q:v', '2', join(assets, `scene-${index + 1}.jpg`),
-    ]);
+    await toJpeg(scene.image, join(assets, `scene-${index + 1}.jpg`));
   }
 
   console.log('Generating narration locally with Kokoro');
@@ -63,14 +60,10 @@ export async function buildStoryboard(
     const audio = `scene-${index + 1}.wav`;
     const speech = join(assets, `speech-${index + 1}.wav`);
     const output = join(assets, audio);
-    await run('ffmpeg', [
-      '-v', 'error', '-nostdin', '-i', speech,
-      '-af', 'highpass=f=75,loudnorm=I=-16:TP=-2:LRA=5', '-ar', '48000', output,
-    ]);
+    await normalizeSpeech(speech, output);
     await rm(speech);
     const frames = await audioFrames(output);
-    const phrases = scene.narration.match(/[^\s]+(?:[ \t]+[^\s]+){0,4}/g) ?? [scene.narration];
-    scenes.push({narration: scene.narration, image, audio, frames, captions: estimatedCaptions(phrases, frames)});
+    scenes.push({narration: scene.narration, image, audio, frames, captions: narrationCaptions(scene.narration, frames)});
   }
   return {title: board.title, scenes};
 }

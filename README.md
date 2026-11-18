@@ -1,6 +1,6 @@
 # AI Short Generator
 
-Turn a ChatGPT-written script and scene illustrations into an educational Short. Kokoro narrates on your Mac, and Remotion adds motion and captions and exports the video locally. The CLI uses no paid APIs.
+Make an illustrated educational Short from your own storyboard or from a topic using a paid API. The storyboard workflow uses local Kokoro narration. Remotion adds motion and captions and exports the video locally in both workflows.
 
 ## Setup
 
@@ -55,6 +55,26 @@ Each run prints a unique directory under `output/` containing the source storybo
 pnpm generate --render output/your-project-directory
 pnpm check
 ```
+
+## Generate from a topic with a paid API
+
+Copy `.env.example` to `.env` and set `OPENAI_API_KEY`. For a third-party OpenAI-compatible provider, set `OPENAI_BASE_URL` to its API base URL (often ending in `/v1`), use that provider’s key, and set `SCRIPT_MODEL`, `IMAGE_MODEL`, `VOICE_MODEL`, and `VOICE` to values it supports. Set `IMAGE_SIZE` if your provider requires a specific size.
+
+```sh
+pnpm generate --paid-topic "Why does the Moon look bigger near the horizon?"
+```
+
+This explicitly opts into billable requests. The full paid workflow needs OpenAI-compatible Chat Completions, image generation (returning a URL or base64 image), and speech generation. Captions are estimated locally and Remotion renders the MP4 on your Mac. Add `--music path/to/track.mp3` to mix a local track into the export.
+
+If your provider only supports Chat Completions, use `--plan-only`. Only script generation uses the API in that mode:
+
+```sh
+pnpm generate --paid-topic "Why does the Moon look bigger near the horizon?" --plan-only
+```
+
+The saved `storyboard.json` includes an illustration prompt and a target image path for each scene. Add your own images at those paths or edit the paths, then pass that JSON to `--storyboard` for local Kokoro narration and rendering.
+
+The CLI only reads paid API credentials when you pass `--paid-topic`. The storyboard, demo, and rerender commands make no paid API calls.
 
 ### Demo illustration prompts
 
