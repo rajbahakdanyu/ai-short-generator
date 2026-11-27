@@ -1,26 +1,61 @@
-# AI Short Generator
+# Short Studio
 
-Generate an illustrated educational Short entirely on your Mac from a topic. Studio also supports imported storyboards and optional paid providers. The storyboard workflow uses local Kokoro narration. Remotion adds motion and captions and exports the video locally in both workflows.
+Turn a topic into a narrated, captioned portrait video on your Mac. Studio writes the script, illustrates the scenes, generates the voiceover and exports an MP4. The local workflow needs no API key.
 
-## Setup
+## Make your first Short
 
-Use Node.js 26.13.1 or newer, pnpm 12, and FFmpeg with `ffprobe` on your PATH.
+**1. Install once.** On an Apple Silicon Mac with Homebrew, open Terminal in this repository’s folder. You need Node.js 26.13.1 or newer, pnpm 12, Python 3.12 and FFmpeg. If you need those tools, run:
 
 ```sh
-brew install ffmpeg
-pnpm install --frozen-lockfile
+brew install node python@3.12 ffmpeg
+npm install --global pnpm@12
 ```
 
-For the complete local Studio setup on macOS, install Python 3.12 with `brew install python@3.12`, then run:
+Then install Studio and its local models. The first setup downloads several gigabytes and needs an internet connection.
 
 ```sh
 pnpm setup:local
+```
+
+**2. Open Studio.** Run this command each time you want to use the app. Leave the terminal running and open [Short Studio](http://127.0.0.1:5173/) in your browser.
+
+```sh
 pnpm studio
 ```
 
-The complete setup targets Apple Silicon Macs. It uses Homebrew for llama.cpp and downloads Gemma 3 1B, SD-Turbo, Kokoro, Python packages, and the rendering browser. Allow several gigabytes of disk space and internet access during setup.
+**3. Generate a video.** Click **Start with a topic** in the welcome panel, or choose **Generate → Local generation**. Try “How do fireflies glow?” Keep the default settings and click **Generate MP4**. When the render finishes, click **Download MP4**. You can find the result again under **Generate → Generation history**.
 
-Open [Short Studio](http://127.0.0.1:5173/) and choose **Generate → Local generation**. Enter a topic, choose 1–6 scenes and a narrator, describe the illustration style, then click **Generate MP4**. Studio remembers these settings in this browser. Gemma writes the narrated scenes, SD-Turbo illustrates each scene, Kokoro voices the script, and Remotion renders a captioned portrait MP4. Generation uses the installed models and needs no API key or internet connection. The separate paid option remains available.
+**Want to explore first?** The editor opens with a narrated black-hole sample. Click Play in the preview to watch it, select a scene to edit it, or click **Export MP4** to render the current draft. To try just the editor and sample before downloading models, install Node.js, pnpm and FFmpeg, then run `pnpm install --frozen-lockfile` and `pnpm studio`. The first export may download the rendering browser.
+
+## Where to go next
+
+- [Edit scenes, captions and audio](#edit-a-short-in-studio)
+- [Generate from the terminal or switch local models](#generate-from-the-terminal)
+- [Use your own script and visuals](#make-a-short-with-chatgpt-and-local-narration)
+- [Configure optional paid providers](#generate-from-a-topic-with-paid-providers)
+
+## Edit a Short in Studio
+
+- Add, rename, reorder, or delete scenes. Drop a still image or MP4 into each scene's **Visual** field.
+- Pick a **Local voice** for each scene, then use **Generate voice** and **Play** to audition it. Heart is the default. Narration or voice edits mark the recording as outdated and keep the old edit in undo history. Voice replacement resets cue timing after confirmation. Upload your own recording or edit duration and individual cues in **Scene details**. Install Kokoro with `pnpm setup:voice` if it is missing. The bundled sample can preview and export without installing Kokoro.
+- Select **Full Short** in the preview to play and scrub across scenes, or **Scene** to focus on the selected shot. The preview uses the same Remotion composition as export and plays available narration and the optional soundtrack.
+- Use **Export MP4** to render and download the video. The saved project and MP4 live under `output/studio-*/`. Use the soundtrack volume control to set its level in preview and export.
+
+**Project → Open project folder** opens a folder containing `storyboard.json` or a prepared `project.json` and `assets/`. For a prepared project, Studio reuses the narration, captions, and scene lengths when exporting. For a storyboard, put the referenced stills and clips inside the selected folder.
+
+Use **Project → Save a copy** to keep a named copy in the browser. Studio also saves a recovery copy before replacing the active draft. Open those copies from **Saved projects**, or use **Download editable draft** and **Open editable draft** to move a project with its media between browsers. Undo and redo are available from the Project menu.
+
+For paid generation, start with **Generate → Paid generation → Storyboard only**. Open the storyboard from the result dialog, review the claims, and add references in **Sources and verification notes**. Return to the generation dialog to prepare the current storyboard or generate its MP4. Choose still illustrations or cinematic portrait clips through [fal WAN 2.7](https://fal.ai/models/fal-ai/wan/v2.7/text-to-video/api). Video generation uses the entered fal key or `FAL_KEY`. The dialog shows the number of generation requests and can enforce a spending estimate based on rates you enter. Studio records attempted generation requests and checks the estimated limit again on retries. You can raise the total estimate limit before resuming. Actual billing comes from the provider.
+
+Custom API endpoints require an explicit key when entered in Studio and must use HTTPS outside loopback. Asset downloads from providers require public HTTPS. Keys entered in Studio are kept in tab memory and excluded from job and project files. Leave fields blank to use `.env` settings or provider defaults.
+
+**Generate → Generation history** shows job status and disk size and lets you reopen or explicitly delete output. Failed or stopped paid jobs can resume from their saved storyboard and reuse completed assets. Failed local exports can retry rendering once the prepared project exists. Re-enter any tab-only provider settings after a reload. Stopping a job halts local processing and new requests. Work already accepted by the provider may finish and incur charges.
+
+Studio listens on loopback. The editor and local MP4 export make no paid API calls. Studio accepts up to 256 MB per upload and 64 MB per file. Visuals support up to 4096 pixels per side. Prepared projects support up to 100 scenes, two minutes per scene, and ten minutes total.
+
+For a production frontend build, run `pnpm build` followed by `pnpm studio:preview`.
+
+## Generate from the terminal
 
 The same local workflow runs from the terminal:
 
@@ -49,41 +84,6 @@ pnpm generate --local-topic "How prisms split light" \
 ```
 
 Use `--voice-model` and `--voice-bank` for custom Kokoro weights. Each run records its model selections in `local-storyboard.json`.
-
-## Code checks
-
-Run `pnpm check` for Biome linting, import organisation, formatting checks, and TypeScript type checking. Use `pnpm lint` to run only the linter or `pnpm format` to format files in place. Run `pnpm exec biome check --write .` to also organise imports and apply safe fixes.
-
-Run `pnpm test` for caption, project format, provider, and Studio recovery tests with mocked paid calls. The integration test uses local FFmpeg. Run `pnpm generate --demo` to exercise the full MP4 render.
-
-Biome uses its recommended rules and enforces React hook checks, type-only imports, unused code checks, and explicit `node:` imports. Generated output, render caches, and local model files are excluded.
-
-## Open Short Studio
-
-```sh
-pnpm studio
-```
-
-Open [Short Studio](http://127.0.0.1:5173/). The bundled black-hole project opens on first launch. Use **Project** to start a blank draft, paste a script with one scene per paragraph, open a project folder, generate from a topic, or reload the sample.
-
-- Add, rename, reorder, or delete scenes. Drop a still image or MP4 into each scene's **Visual** field.
-- Pick a **Local voice** for each scene, then use **Generate voice** and **Play** to audition it. Heart is the default. Narration or voice edits mark the recording as outdated and keep the old edit in undo history. Voice replacement resets cue timing after confirmation. Upload your own recording or edit duration and individual cues in **Scene details**. Install Kokoro with `pnpm setup:voice` if it is missing. The bundled sample can preview and export without installing Kokoro.
-- Select **Full Short** in the preview to play and scrub across scenes, or **Scene** to focus on the selected shot. The preview uses the same Remotion composition as export and plays available narration and the optional soundtrack.
-- Use **Export MP4** to render and download the video. The saved project and MP4 live under `output/studio-*/`. Use the soundtrack volume control to set its level in preview and export.
-
-**Project → Open project folder** opens a folder containing `storyboard.json` or a prepared `project.json` and `assets/`. For a prepared project, Studio reuses the narration, captions, and scene lengths when exporting. For a storyboard, put the referenced stills and clips inside the selected folder.
-
-Use **Project → Save a copy** to keep a named copy in the browser. Studio also saves a recovery copy before replacing the active draft. Open those copies from **Saved projects**, or use **Download editable draft** and **Open editable draft** to move a project with its media between browsers. Undo and redo are available from the Project menu.
-
-For paid generation, start with **Generate → Paid generation → Storyboard only**. Open the storyboard from the result dialog, review the claims, and add references in **Sources and verification notes**. Return to the generation dialog to prepare the current storyboard or generate its MP4. Choose still illustrations or cinematic portrait clips through [fal WAN 2.7](https://fal.ai/models/fal-ai/wan/v2.7/text-to-video/api). Video generation uses the entered fal key or `FAL_KEY`. The dialog shows the number of generation requests and can enforce a spending estimate based on rates you enter. Studio records attempted generation requests and checks the estimated limit again on retries. You can raise the total estimate limit before resuming. Actual billing comes from the provider.
-
-Custom API endpoints require an explicit key when entered in Studio and must use HTTPS outside loopback. Asset downloads from providers require public HTTPS. Keys entered in Studio are kept in tab memory and excluded from job and project files. Leave fields blank to use `.env` settings or provider defaults.
-
-**Generate → Generation history** shows job status and disk size and lets you reopen or explicitly delete output. Failed or stopped paid jobs can resume from their saved storyboard and reuse completed assets. Failed local exports can retry rendering once the prepared project exists. Re-enter any tab-only provider settings after a reload. Stopping a job halts local processing and new requests. Work already accepted by the provider may finish and incur charges.
-
-Studio listens on loopback. The editor and local MP4 export make no paid API calls. Studio accepts up to 256 MB per upload and 64 MB per file. Visuals support up to 4096 pixels per side. Prepared projects support up to 100 scenes, two minutes per scene, and ten minutes total.
-
-For a production frontend build, run `pnpm build` followed by `pnpm studio:preview`.
 
 ## Try a local demo
 
@@ -195,6 +195,14 @@ pnpm generate --paid-topic "Why does the Moon look bigger near the horizon?" --p
 ```
 
 Add your own images or MP4 clips to that storyboard and finish with `--storyboard` or open the folder in Studio. Add `--prepare-only` to the full paid command to generate images and narration and stop before rendering. The CLI paid route generates still illustrations. To recover a paid CLI run with a saved storyboard, use `pnpm generate --resume-paid output/your-project` with the original provider settings. Captions and rendering run locally in every mode. Studio only calls paid APIs when you submit **Generate from topic**. The demo, storyboard, and rerender commands make no paid API calls.
+
+## Code checks
+
+Run `pnpm check` for Biome linting, import organisation, formatting checks, and TypeScript type checking. Use `pnpm lint` to run only the linter or `pnpm format` to format files in place. Run `pnpm exec biome check --write .` to also organise imports and apply safe fixes.
+
+Run `pnpm test` for caption, project format, provider, and Studio recovery tests with mocked paid calls. The integration test uses local FFmpeg. Run `pnpm generate --demo` to exercise the full MP4 render.
+
+Biome uses its recommended rules and enforces React hook checks, type-only imports, unused code checks, and explicit `node:` imports. Generated output, render caches, and local model files are excluded.
 
 ### Demo illustration prompts
 

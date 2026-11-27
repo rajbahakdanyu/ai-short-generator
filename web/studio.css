@@ -930,3 +930,42 @@ main {
     grid-template-columns: 1fr;
   }
 }
+
+.welcome-panel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+}
+.welcome-panel div:first-child {
+  flex: 1;
+}
+.welcome-panel h2 {
+  margin: 0;
+  font: 600 20px var(--display);
+}
+.welcome-panel p {
+  max-width: 70ch;
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+@media (max-width: 620px) {
+  .welcome-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+  .welcome-panel > button:first-of-type {
+    grid-row: 2;
+    justify-self: start;
+  }
+  .welcome-panel > button:last-child {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}

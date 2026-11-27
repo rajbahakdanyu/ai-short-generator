@@ -82,6 +82,11 @@ function Studio() {
     'local' | 'script' | 'new' | 'sample' | 'export' | 'paid' | 'import' | 'library' | 'outputs'
   >();
   const [paidSelection, setPaidSelection] = useState<PaidSelection>({});
+  const [guideDismissed, setGuideDismissed] = useLocalStorage({
+    key: 'short-studio-guide-dismissed',
+    defaultValue: false,
+    getInitialValueInEffect: false,
+  });
   const [settings, setSettings] = useLocalStorage({
     key: 'short-studio-local-settings',
     defaultValue: localSettings.parse({}),
@@ -474,6 +479,15 @@ function Studio() {
               </Menu.Item>
               <Menu.Item onClick={() => draftPicker.current?.click()}>Open editable draft</Menu.Item>
               <Menu.Divider />
+              <Menu.Item
+                leftSection={<Info size={15} />}
+                onClick={() => {
+                  setGuideDismissed(false);
+                  window.scrollTo(0, 0);
+                }}
+              >
+                Getting started
+              </Menu.Item>
               <Menu.Item disabled={!canUndo} onClick={undo}>
                 Undo
               </Menu.Item>
@@ -558,6 +572,35 @@ function Studio() {
         }}
       />
       <main>
+        {!guideDismissed && (
+          <section className="welcome-panel" aria-labelledby="welcome-title">
+            <div>
+              <h2 id="welcome-title">Make your first Short</h2>
+              <p>
+                Start with a topic and Studio will write, illustrate and narrate it on your Mac. To explore
+                the editor first, press Play in the preview below.
+              </p>
+            </div>
+            <Button
+              className="primary"
+              disabled={running || !!voiceScene}
+              onClick={() => {
+                setTopic((current) => current || 'How do fireflies glow?');
+                setGuideDismissed(true);
+                openLocal('short');
+              }}
+            >
+              Start with a topic
+            </Button>
+            <ActionIcon
+              variant="subtle"
+              aria-label="Dismiss getting started"
+              onClick={() => setGuideDismissed(true)}
+            >
+              <X size={16} />
+            </ActionIcon>
+          </section>
+        )}
         <div className="project-header">
           <div className="project-title">
             <label htmlFor="project-title">
