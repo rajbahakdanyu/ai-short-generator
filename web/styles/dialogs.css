@@ -1,0 +1,111 @@
+.export-status {
+  display: grid;
+  gap: 13px;
+}
+.export-video {
+  max-height: 50vh;
+  width: 100%;
+  background: #0a0a0b;
+  border-radius: 8px;
+}
+.provider-settings {
+  display: grid;
+  gap: 12px;
+}
+.provider-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px;
+}
+.provider-block {
+  min-inline-size: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px 12px;
+}
+.provider-block legend {
+  padding: 0 5px;
+  color: #d5d7df;
+  font-size: 12px;
+  font-weight: 650;
+}
+.provider-advanced {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 8px;
+}
+.provider-advanced summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+}
+.provider-advanced[open] summary,
+.provider-advanced .provider-row {
+  margin-bottom: 8px;
+}
+.generation-fields,
+.generation-fields fieldset {
+  display: grid;
+  gap: 14px;
+}
+.generation-fields {
+  padding-top: 20px;
+}
+.generation-fields fieldset {
+  margin: 0;
+  min-width: 0;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: 8px;
+  padding: 10px 16px 16px;
+}
+.generation-fields legend {
+  padding-inline: 5px;
+  font-weight: 650;
+}
+.generation-fields > button {
+  justify-self: end;
+}
+.generation-actions,
+.local-short-form {
+  display: grid;
+  gap: 10px;
+}
+.generation-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-block: 8px;
+  border-top: 1px solid var(--line);
+  background: var(--mantine-color-body);
+}
+.local-generation-modal-content {
+  max-height: calc(100dvh - 32px);
+}
+.local-generation-modal-body {
+  max-height: calc(100dvh - 180px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.generation-pair {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(0, 2fr);
+  gap: 12px;
+}
+.paid-dialog-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 12px 0 2px;
+  border-top: 1px solid var(--line);
+  background: var(--mantine-color-body);
+}
+.paid-dialog-buttons {
+  margin-left: auto;
+}

@@ -76,3 +76,9 @@ export async function parseUpload(req: IncomingMessage) {
 }
 
 export type Upload = Awaited<ReturnType<typeof parseUpload>>;
+
+export function uploadPart(form: Upload, key: string) {
+  const path = form.files.get(key);
+  if (!path) throw new Error(`Missing file for ${key}.`);
+  return path;
+}

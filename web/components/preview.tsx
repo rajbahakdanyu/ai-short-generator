@@ -1,10 +1,11 @@
 import {ActionIcon, SegmentedControl} from '@mantine/core';
 import {Player, type PlayerRef} from '@remotion/player';
 import {Captions, Film} from 'lucide-react';
-import {useEffect, useRef, useState} from 'react';
-import {type PlaybackProps, Short, shortHeight, shortWidth} from '../src/composition.tsx';
-import {FPS} from '../src/timing.ts';
-import {type Asset, assetUrl, captionsFor, type DraftScene, framesFor} from './model.ts';
+import {memo, useEffect, useRef, useState} from 'react';
+import {type PlaybackProps, Short, shortHeight, shortWidth} from '../../src/composition.tsx';
+import {FPS} from '../../src/timing.ts';
+import {assetUrl} from '../assets.ts';
+import {type Asset, captionsFor, type DraftScene, framesFor} from '../model.ts';
 
 export function useAsset(asset?: Asset) {
   const source = asset?.source;
@@ -19,18 +20,16 @@ export function useAsset(asset?: Asset) {
   return object?.source === source ? object?.url : undefined;
 }
 
-export function Thumbnail({scene}: {scene: DraftScene}) {
-  const src = useAsset(scene.media);
+export const Thumbnail = memo(function Thumbnail({media}: {media?: Asset}) {
+  const src = useAsset(media);
   return (
     <div className="thumbnail">
-      {src && scene.media?.kind === 'image' && <img src={src} alt="" />}
-      {src && scene.media?.kind === 'video' && (
-        <video src={src} muted playsInline preload="metadata" aria-hidden />
-      )}
+      {src && media?.kind === 'image' && <img src={src} alt="" />}
+      {src && media?.kind === 'video' && <video src={src} muted playsInline preload="metadata" aria-hidden />}
       {!src && <Film size={17} />}
     </div>
   );
-}
+});
 
 export function Preview({
   scenes,

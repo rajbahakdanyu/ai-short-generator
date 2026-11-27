@@ -1,0 +1,149 @@
+@media (max-width: 1030px) {
+  main {
+    padding-inline: 17px;
+  }
+  .topbar {
+    padding-inline: 17px;
+  }
+  .workbench {
+    grid-template-columns: minmax(175px, 0.75fr) minmax(290px, 1.35fr) minmax(218px, 0.9fr);
+    gap: 8px;
+  }
+  .inspector-body {
+    padding: 11px;
+  }
+}
+@media (max-width: 960px) {
+  .workbench {
+    grid-template-columns: minmax(125px, 0.7fr) minmax(0, 1.3fr);
+    gap: 10px;
+  }
+  .inspector {
+    grid-column: 1 / -1;
+  }
+  .inspector-body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .caption-panel {
+    grid-column: 1 / -1;
+  }
+  .local,
+  .project-meta > span {
+    display: none;
+  }
+}
+@media (max-width: 620px) {
+  .brand {
+    font-size: 17px;
+    gap: 7px;
+  }
+  .brand-icon {
+    width: 29px;
+    height: 29px;
+  }
+  .topbar {
+    height: 57px;
+    padding-inline: 10px;
+  }
+  .top-actions {
+    gap: 5px;
+  }
+  .top-actions button {
+    padding-inline: 8px;
+    font-size: 11px;
+  }
+  main {
+    padding: 15px 10px 22px;
+  }
+  .project-header {
+    margin-bottom: 13px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .project-title {
+    flex: 1 1 100%;
+  }
+  .project-title input {
+    font-size: clamp(18px, 5.5vw, 22px);
+  }
+  .project-meta {
+    gap: 2px;
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .center {
+    grid-row: 1;
+  }
+  .scene-panel,
+  .inspector {
+    grid-column: 1;
+  }
+  .scene-list {
+    display: flex;
+    overflow-x: auto;
+  }
+  .scene-row {
+    min-width: 154px;
+    width: 154px;
+  }
+  .add-scene {
+    min-width: 92px;
+    width: auto;
+    align-self: center;
+  }
+  .monitor-stage {
+    min-height: 0;
+    height: clamp(220px, 51svh, 420px);
+  }
+  .inspector-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .welcome-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+  .welcome-panel > button:first-of-type {
+    grid-row: 2;
+    justify-self: start;
+  }
+  .welcome-panel > button:last-child {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+@media (max-width: 520px) {
+  .topbar {
+    height: auto;
+    min-height: 57px;
+    flex-wrap: wrap;
+    padding-block: 8px;
+    gap: 6px;
+  }
+  .top-actions {
+    margin-left: auto;
+  }
+  .generation-pair {
+    grid-template-columns: 1fr;
+  }
+  .paid-dialog-actions {
+    gap: 4px;
+  }
+  .paid-dialog-buttons {
+    gap: 6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone,
+  .preview-caption {
+    animation: none;
+  }
+  .scene-row,
+  .timeline-strip button,
+  .upload-target {
+    transition: none;
+  }
+}

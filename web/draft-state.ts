@@ -1,6 +1,7 @@
 import {get, set, update} from 'idb-keyval';
-import {useEffect, useReducer, useState} from 'react';
-import {type Draft, sampleDraft} from './model.ts';
+import {useCallback, useEffect, useReducer, useState} from 'react';
+import {sampleDraft} from './assets.ts';
+import type {Draft} from './model.ts';
 
 const activeKey = 'short-studio-draft';
 const libraryKey = 'short-studio-projects';
@@ -64,15 +65,21 @@ export function useDraft() {
     );
   }, [draft, hydrated]);
 
+  const setDraft = useCallback(
+    (update: Draft | ((draft: Draft) => Draft)) => dispatch({type: 'edit', update}),
+    [],
+  );
+  const undo = useCallback(() => dispatch({type: 'undo'}), []);
+  const redo = useCallback(() => dispatch({type: 'redo'}), []);
   return {
     draft,
     hydrated,
     saveError,
-    setDraft: (update: Draft | ((draft: Draft) => Draft)) => dispatch({type: 'edit', update}),
+    setDraft,
     canUndo: !!history.past.length,
     canRedo: !!history.future.length,
-    undo: () => dispatch({type: 'undo'}),
-    redo: () => dispatch({type: 'redo'}),
+    undo,
+    redo,
   };
 }
 

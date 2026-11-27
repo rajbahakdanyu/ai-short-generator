@@ -1,10 +1,16 @@
 import {useEffect, useState} from 'react';
-import {ApiError, api, type Job} from './model.ts';
+import {errorMessage} from '../src/errors.ts';
+import {ApiError, getJson} from './api.ts';
+import type {Job} from './model.ts';
 
 const lastJobKey = 'short-studio-last-job';
 export const jobRunning = (job?: Job) => !!job && !['Complete', 'Failed', 'Cancelled'].includes(job.phase);
-export const mutationHeaders = {'X-Short-Studio': '1'};
-export const jsonHeaders = {...mutationHeaders, 'Content-Type': 'application/json'};
+export const failedJob = (issue: unknown, job?: Partial<Job>): Job => ({
+  progress: 0,
+  ...job,
+  phase: 'Failed',
+  error: errorMessage(issue),
+});
 
 export function useStudioJobs() {
   const [job, setJob] = useState<Job | undefined>(() => {
@@ -36,9 +42,9 @@ export function useStudioJobs() {
     const controller = new AbortController();
     const poll = async () => {
       try {
-        const progress: Job = await (
-          await api(`jobs/${id}`, {signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)])})
-        ).json();
+        const progress = await getJson<Job>(`jobs/${id}`, {
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]),
+        });
         if (!active) return;
         setPollError('');
         setJob({...progress, id});

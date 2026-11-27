@@ -11,12 +11,15 @@ export async function writeAtomic(path: string, data: string | Buffer) {
   }
 }
 
-export async function readOptional(path: string) {
-  try {
-    return await readFile(path);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-  }
+export const ifMissing =
+  <T>(fallback: T) =>
+  (error: NodeJS.ErrnoException): T => {
+    if (error.code !== 'ENOENT') throw error;
+    return fallback;
+  };
+
+export function readOptional(path: string) {
+  return readFile(path).catch(ifMissing(undefined));
 }
 
 export async function writeJson(path: string, data: unknown) {

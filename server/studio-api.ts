@@ -1,666 +1,278 @@
-import {createHash, randomUUID} from 'node:crypto';
-import {createReadStream} from 'node:fs';
-import {copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import {copyFile, mkdtemp, readFile, rm} from 'node:fs/promises';
 import type {IncomingMessage, ServerResponse} from 'node:http';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {pipeline} from 'node:stream/promises';
 import type {Plugin} from 'vite';
-import {z} from 'zod';
-import {readOptional, writeJson} from '../src/checkpoint.ts';
+import type {z} from 'zod';
+import {writeJson} from '../src/checkpoint.ts';
+import {errorMessage} from '../src/errors.ts';
 import {localSettings} from '../src/local-settings.ts';
 import {type LocalStoryboard, localStoryboardSchema} from '../src/local-storyboard.ts';
-import {buildLocalTopic, localTopic, planLocalTopic, prepareLocalStoryboard} from '../src/local-topic.ts';
-import {run, toWav} from '../src/media.ts';
-import {buildPaidShort, paidBoardSchema} from '../src/paid.ts';
-import {
-  kokoroVoiceSchema,
-  maxScenes,
-  projectSchema,
-  projectTitle,
-  sceneCaptions,
-  sceneFrames,
-  sceneMetadata,
-} from '../src/project.ts';
 import {paidProviders, setting} from '../src/providers/config.ts';
-import {renderShort} from '../src/render.ts';
-import {buildStoryboard, generateNarration, readStoryboard} from '../src/storyboard.ts';
-
+import {generateNarration} from '../src/storyboard.ts';
+import {isLocalRequest, json, mediaType, readJson, serveMedia} from './http.ts';
+import {createJobRunner, type PendingJob} from './job-runner.ts';
 import {
   createJob,
   deleteJob,
-  estimatedSpend,
   idPattern,
+  isResumable,
   type Job,
   jobDirectory,
+  jobStatus,
   listJobs,
+  readDraft,
   readJob,
+  readLocalBoard,
+  restartJob,
   saveJob,
 } from './jobs.ts';
-import {parseUpload, type Upload} from './uploads.ts';
+import {
+  prepareLocalJob,
+  providerFingerprint,
+  queueExport,
+  queuePaid,
+  renderJob,
+  runLocalJob,
+} from './pipelines.ts';
+import {
+  localGenerationRequest,
+  localMode,
+  localPrepareRequest,
+  paidRequest,
+  voiceRequest,
+} from './requests.ts';
+import {parseUpload, uploadPart} from './uploads.ts';
 
-const requestSchema = z.object({
-  title: projectTitle,
-  musicVolume: z.number().min(0).max(1).optional(),
-  scenes: z
-    .array(
-      sceneMetadata.extend({
-        kind: z.enum(['image', 'video']),
-        captions: sceneCaptions.optional(),
-        frames: sceneFrames.optional(),
-      }),
-    )
-    .min(1)
-    .max(maxScenes),
-});
-const providerPick = z.object({
-  provider: z.string().trim().min(1).max(50).optional(),
-  model: z.string().trim().min(1).max(300).optional(),
-  apiKey: z.string().trim().min(1).max(1500).optional(),
-  baseUrl: z.string().trim().min(1).max(1000).optional(),
-});
-const paidRequest = z.object({
-  topic: z.string().trim().max(4000).default(''),
-  board: paidBoardSchema.optional(),
-  video: z.boolean().default(false),
-  videoKey: z.string().trim().min(1).max(1500).optional(),
-  resumeLimit: z.number().nonnegative().optional(),
-  estimate: z
-    .object({
-      script: z.number().nonnegative(),
-      visual: z.number().nonnegative(),
-      voice: z.number().nonnegative(),
-      limit: z.number().nonnegative(),
-    })
-    .optional(),
-  mode: z.enum(['plan', 'prepare', 'export']),
-  selection: z
-    .object({
-      script: providerPick.optional(),
-      image: providerPick
-        .extend({
-          size: z.string().trim().min(1).max(50).optional(),
-          aspectRatio: z.string().trim().min(1).max(30).optional(),
-          options: z.string().trim().min(1).max(5000).optional(),
-        })
-        .optional(),
-      voice: providerPick
-        .extend({
-          voice: z.string().trim().min(1).max(200).optional(),
-          format: z.enum(['wav', 'mp3', 'flac', 'aac', 'opus', 'pcm']).optional(),
-        })
-        .optional(),
-    })
-    .optional(),
-});
-const localGenerationRequest = localSettings.extend({topic: localTopic, mode: z.enum(['direct', 'plan'])});
-const localPrepareRequest = z.object({
-  mode: z.literal('prepare'),
-  planId: z.string().regex(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/),
-  board: z.unknown(),
-});
+const notFound = (res: ServerResponse) => json(res, 404, {error: 'Studio resource not found.'});
 
-function json(res: ServerResponse, status: number, value: unknown) {
-  res.writeHead(status, {'Content-Type': 'application/json', 'Cache-Control': 'no-store'});
-  res.end(JSON.stringify(value));
+function jobRoute(path: string) {
+  const match = path.match(/^\/api\/studio\/jobs\/([a-f0-9-]+)(?:\/(.+))?$/);
+  return {id: match && idPattern.test(match[1]) ? match[1] : undefined, resource: match?.[2]};
 }
 
-function uploadPart(form: Upload, key: string) {
-  const path = form.files.get(key);
-  if (!path) throw new Error(`Missing file for ${key}.`);
-  return path;
-}
-
-async function serveMedia(req: IncomingMessage, res: ServerResponse, path: string, contentType: string) {
-  const {size} = await stat(path);
-  const headers = {'Content-Type': contentType, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store'};
-  const range = req.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
-  if (!range) {
-    res.writeHead(200, {...headers, 'Content-Length': size});
-    await pipeline(createReadStream(path), res);
-    return;
+async function resumeJob(req: IncomingMessage, id: string): Promise<PendingJob> {
+  const job = await readJob(id);
+  if (!job || !isResumable(job)) throw new Error('This job has no resumable project.');
+  if (job.local?.mode === 'prepare' && job.draft === 'local-storyboard.json') {
+    const {settings} = job.local;
+    const board = await readLocalBoard(id, settings);
+    await restartJob(id, job, 'Preparing scenes');
+    return {id, job, task: (signal) => prepareLocalJob(board, settings, job, id, signal)};
   }
-  const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
-  const end = range[1] && range[2] ? Math.min(size - 1, Number(range[2])) : size - 1;
-  if (start > end || start >= size) {
-    res.writeHead(416, {'Content-Range': `bytes */${size}`});
-    res.end();
-    return;
+  if (!job.paid && job.draft === 'project.json') {
+    await restartJob(id, job, 'Rendering video');
+    return {id, job, task: (signal) => renderJob(job, id, signal)};
   }
-  res.writeHead(206, {
-    ...headers,
-    'Content-Range': `bytes ${start}-${end}/${size}`,
-    'Content-Length': end - start + 1,
-  });
-  await pipeline(createReadStream(path, {start, end}), res);
+  if (!job.paid) throw new Error('This job has no resumable storyboard.');
+  const input = paidRequest.parse(await readJson(req));
+  const {mode, video, fingerprint} = job.paid;
+  const providers = paidProviders(mode === 'plan', input.selection, video, mode !== 'plan');
+  if (providerFingerprint(providers, video) !== fingerprint)
+    throw new Error('Select the original providers and models before resuming.');
+  const videoKey = video ? (input.videoKey ?? setting('FAL_KEY')) : undefined;
+  if (video && !videoKey) throw new Error('Restore the fal API key before resuming.');
+  if (input.resumeLimit !== undefined && job.estimate) {
+    if (input.resumeLimit < job.estimate.limit)
+      throw new Error('The new limit must be at least the original limit.');
+    job.estimate.limit = input.resumeLimit;
+  }
+  await restartJob(id, job, 'Preparing scenes');
+  return {id, job, task: (signal) => queuePaid({mode}, providers, job, id, {signal, videoKey})};
 }
 
-async function readJson(req: IncomingMessage) {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of req.iterator({destroyOnReturn: false})) {
-    size += chunk.length;
-    if (size > 160_000) throw new Error('This studio request is too long.');
-    chunks.push(chunk);
-  }
-  return JSON.parse(Buffer.concat(chunks).toString()) as unknown;
-}
-
-async function renderJob(job: Job, id: string, signal?: AbortSignal) {
-  const directory = jobDirectory(id);
-  job.phase = 'Rendering video';
-  job.detail = 'Encoding MP4';
+async function prepareLocal({planId: id, board: approved}: z.infer<typeof localPrepareRequest>) {
+  const job = await readJob(id);
+  if (
+    !job ||
+    !['Complete', 'Failed', 'Cancelled'].includes(job.phase) ||
+    !job.local ||
+    !['plan', 'prepare'].includes(job.local.mode) ||
+    job.draft !== 'local-storyboard.json'
+  )
+    throw new Error('Review a completed local storyboard before preparing scenes.');
+  const settings = localSettings.parse(job.local.settings);
+  const board = localStoryboardSchema(settings).parse(approved) as LocalStoryboard;
+  job.local = {mode: 'prepare', settings};
   job.progress = 0;
+  job.detail = 'Preparing approved storyboard';
+  await writeJson(join(jobDirectory(id), 'local-storyboard.json'), {...board, settings});
+  await restartJob(id, job, 'Preparing scenes');
+  return {id, job, task: (signal: AbortSignal) => prepareLocalJob(board, settings, job, id, signal)};
+}
+
+async function startLocal(req: IncomingMessage): Promise<PendingJob> {
+  const decoded = await readJson(req);
+  if (localMode.parse(decoded).mode === 'prepare') return prepareLocal(localPrepareRequest.parse(decoded));
+  const {topic, mode, ...settings} = localGenerationRequest.parse(decoded);
+  const id = randomUUID();
+  const job = await createJob(id);
+  job.local = {mode, settings};
   await saveJob(id, job);
-  job.file = await renderShort(
-    directory,
-    (progress) => {
-      job.progress = progress;
-    },
-    signal,
-  );
+  return {id, job, task: (signal) => runLocalJob(topic, mode, settings, job, id, signal)};
 }
 
-async function prepareLocalJob(
-  board: LocalStoryboard,
-  settings: z.input<typeof localSettings>,
-  job: Job,
-  id: string,
-  signal: AbortSignal,
-) {
-  const project = await prepareLocalStoryboard(
-    board,
-    jobDirectory(id),
-    (detail) => {
-      job.detail = detail;
-    },
-    signal,
-    settings,
-  );
-  await writeJson(join(jobDirectory(id), 'project.json'), projectSchema.parse(project));
-  job.draft = 'project.json';
-  await renderJob(job, id, signal);
-}
-
-async function prepareMusic(
-  track: string | undefined,
-  directory: string,
-  signal?: AbortSignal,
-): Promise<'music.wav' | undefined> {
-  if (!track) return;
-  await toWav(track, join(directory, 'assets', 'music.wav'), undefined, signal);
-  return 'music.wav';
-}
-
-async function queuePaid(
-  input: {mode: NonNullable<Job['paid']>['mode']; topic?: string; board?: z.infer<typeof paidBoardSchema>},
-  providers: ReturnType<typeof paidProviders>,
-  job: Job,
-  id: string,
-  options: {signal: AbortSignal; videoKey?: string},
-) {
-  const directory = jobDirectory(id);
-  await mkdir(join(directory, 'assets'), {recursive: true});
-  if (input.mode !== 'plan') {
-    await run('ffprobe', ['-version']);
-    await run('ffmpeg', ['-version']);
-  }
-  const {signal, videoKey} = options;
-  const soundtrack = join(directory, 'soundtrack.source');
-  const soundtrackExists = await stat(soundtrack).then(
-    () => true,
-    () => false,
-  );
-  if (soundtrackExists) {
-    job.detail = 'Preparing soundtrack';
-    await prepareMusic(soundtrack, directory, signal);
-    await rm(soundtrack);
-  }
-  const music = await stat(join(directory, 'assets', 'music.wav')).then(
-    () => 'music.wav' as const,
-    () => undefined,
-  );
-  const result = await buildPaidShort(providers, input.topic ?? '', directory, {
-    signal,
-    videoKey,
-    approvedBoard: input.board,
-    async beforeRequest(stage) {
-      signal.throwIfAborted();
-      const usage = {...(job.usage ?? {script: 0, visual: 0, voice: 0})};
-      usage[stage]++;
-      if (job.estimate && estimatedSpend(usage, job.estimate) > job.estimate.limit + 1e-8)
-        throw new Error(
-          'Estimated spending limit reached. Raise the limit to submit additional provider requests.',
-        );
-      job.usage = usage;
-      await saveJob(id, job);
-      signal.throwIfAborted();
-    },
-    async report(detail, progress) {
-      job.detail = detail;
-      job.progress = Math.max(job.progress, progress);
-      if (progress >= 0.08) job.draft = 'storyboard.json';
-      await saveJob(id, {...job});
-    },
-  });
-  signal.throwIfAborted();
-  if (typeof result === 'string') {
-    job.draft = 'storyboard.json';
-    return;
-  }
-  const project = projectSchema.parse({...result, music});
-  await writeJson(join(directory, 'project.json'), project);
-  job.draft = 'project.json';
-  if (input.mode === 'export') await renderJob(job, id, signal);
-}
-
-async function queueExport(form: Upload, job: Job, id: string, signal: AbortSignal) {
-  const {title, scenes, musicVolume} = requestSchema.parse(JSON.parse(String(form.fields.get('storyboard'))));
-  const directory = jobDirectory(id);
-  const assets = join(directory, 'assets');
-  await mkdir(assets, {recursive: true});
-
-  const source = [];
-  const prepared = [];
-  for (const [index, scene] of scenes.entries()) {
-    signal.throwIfAborted();
-    job.detail = `Preparing scene ${index + 1} of ${scenes.length}`;
-    job.progress = (0.35 * index) / scenes.length;
-    const visual = uploadPart(form, `visual-${index}`);
-    const filename = `input-${index + 1}.${scene.kind === 'video' ? 'mp4' : 'image'}`;
-    await copyFile(visual, join(directory, filename));
-    source.push({
-      name: scene.name,
-      sources: scene.sources,
-      narration: scene.narration,
-      imagePrompt: scene.imagePrompt,
-      kokoroVoice: scene.kokoroVoice,
-      [scene.kind]: filename,
-    });
-    let voice: string | undefined;
-    if (form.files.has(`voice-${index}`)) {
-      const recording = uploadPart(form, `voice-${index}`);
-      voice = join(directory, `voice-${index + 1}.wav`);
-      await toWav(recording, voice, 120, signal);
+async function startPaid(req: IncomingMessage): Promise<PendingJob> {
+  const form = req.headers['content-type']?.startsWith('multipart/form-data;')
+    ? await parseUpload(req)
+    : undefined;
+  try {
+    const input = paidRequest.parse(
+      form ? JSON.parse(String(form.fields.get('request'))) : await readJson(req),
+    );
+    const track = form?.files.has('music') ? uploadPart(form, 'music') : undefined;
+    if (track && input.mode === 'plan') throw new Error('A storyboard-only run cannot include a soundtrack.');
+    if (input.mode === 'plan' ? !input.topic : !input.board)
+      throw new Error('Review a storyboard before preparing paid scenes.');
+    const providers = paidProviders(
+      input.mode === 'plan',
+      input.selection,
+      input.video,
+      input.mode !== 'plan',
+    );
+    const videoKey =
+      input.video && input.mode !== 'plan' ? (input.videoKey ?? setting('FAL_KEY')) : undefined;
+    if (input.video && !videoKey) throw new Error('Enter a fal API key or set FAL_KEY.');
+    if (input.estimate) {
+      const {script, visual, voice, limit} = input.estimate;
+      const estimate =
+        input.mode === 'plan'
+          ? script
+          : (visual + (providers.voice?.provider === 'kokoro' ? 0 : voice)) *
+            (input.board?.scenes.length ?? 0);
+      if (estimate > limit + 1e-8) throw new Error('Estimated provider charges exceed your limit.');
     }
-    prepared.push({voice, captions: scene.captions, frames: scene.frames});
+    const id = randomUUID();
+    const job = await createJob(id, {
+      mode: input.mode,
+      video: input.video,
+      fingerprint: providerFingerprint(providers, input.video),
+    });
+    job.estimate = input.estimate;
+    job.usage = {script: 0, visual: 0, voice: 0};
+    await saveJob(id, job);
+    if (track) await copyFile(track, join(jobDirectory(id), 'soundtrack.source'));
+    if (input.board) {
+      await writeJson(join(jobDirectory(id), 'storyboard.json'), input.board);
+      job.draft = 'storyboard.json';
+      await saveJob(id, job);
+    }
+    return {
+      id,
+      job,
+      task: (signal) =>
+        queuePaid(input, providers, job, id, {signal, videoKey}).finally(() => form?.cleanup()),
+    };
+  } catch (error) {
+    await form?.cleanup();
+    throw error;
   }
+}
 
-  const storyboard = join(directory, 'storyboard.json');
-  await writeFile(storyboard, `${JSON.stringify({title, scenes: source}, null, 2)}\n`);
-  const music = await prepareMusic(
-    form.files.has('music') ? uploadPart(form, 'music') : undefined,
-    directory,
-    signal,
-  );
-  const project = projectSchema.parse({
-    ...(await buildStoryboard(
-      await readStoryboard(storyboard),
-      directory,
-      prepared,
-      (index) => {
-        job.detail = `Processing media for scene ${index + 1} of ${scenes.length}`;
-        job.progress = 0.35 + (0.65 * index) / scenes.length;
-      },
-      signal,
-    )),
-    music,
-    musicVolume,
-  });
-  await writeJson(join(directory, 'project.json'), project);
-  job.draft = 'project.json';
-  await renderJob(job, id, signal);
+async function startExport(req: IncomingMessage): Promise<PendingJob> {
+  const form = await parseUpload(req);
+  try {
+    const id = randomUUID();
+    const job = await createJob(id);
+    return {id, job, task: (signal) => queueExport(form, job, id, signal).finally(form.cleanup)};
+  } catch (error) {
+    await form.cleanup();
+    throw error;
+  }
+}
+
+async function previewVoice(req: IncomingMessage, res: ServerResponse) {
+  const {narration, kokoroVoice} = voiceRequest.parse(await readJson(req));
+  const directory = await mkdtemp(join(tmpdir(), 'short-studio-'));
+  try {
+    await generateNarration([{index: 1, narration, kokoroVoice}], directory, directory);
+    const audio = await readFile(join(directory, 'scene-1.wav'));
+    res.writeHead(200, {'Content-Type': 'audio/wav', 'Cache-Control': 'no-store'});
+    res.end(audio);
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
+}
+
+async function sendJobResource(
+  req: IncomingMessage,
+  res: ServerResponse,
+  id: string,
+  job: Job,
+  resource: string | undefined,
+) {
+  if (!resource) return json(res, 200, jobStatus(job));
+  if (resource === 'video' && job.phase === 'Complete' && job.file)
+    return serveMedia(req, res, job.file, 'video/mp4');
+  if (!job.draft) return notFound(res);
+  if (resource === 'draft') return json(res, 200, await readDraft(id, job.draft, job.local));
+  const asset = resource.match(/^assets\/((?:scene-\d+\.(?:jpg|mp4|wav))|music\.wav)$/);
+  if (!asset) return notFound(res);
+  return serveMedia(req, res, join(jobDirectory(id), 'assets', asset[1]), mediaType(asset[1]));
 }
 
 export function studioApi(): Plugin {
-  let active: {id: string; job: Job; controller: AbortController} | undefined;
-  let rendering = false;
-  let narrating = false;
+  const runner = createJobRunner();
+  const busy = (res: ServerResponse) => json(res, 409, {error: 'Another generation is running.'});
 
-  function startJob(id: string, job: Job, task: (signal: AbortSignal) => Promise<void>) {
-    const controller = new AbortController();
-    active = {id, job, controller};
-    void task(controller.signal)
-      .then(() => {
-        controller.signal.throwIfAborted();
-        job.phase = 'Complete';
-        job.progress = 1;
-      })
-      .catch((error: unknown) => {
-        job.phase = controller.signal.aborted ? 'Cancelled' : 'Failed';
-        job.error = controller.signal.aborted
-          ? job.paid
-            ? 'Generation stopped. Provider calls already submitted may still be charged.'
-            : 'Generation stopped.'
-          : error instanceof Error
-            ? error.message
-            : String(error);
-      })
-      .finally(async () => {
-        try {
-          await saveJob(id, job);
-        } finally {
-          active = undefined;
-          rendering = false;
-        }
-      })
-      .catch((error) => console.error('Could not save Studio job status', error));
-    return id;
+  async function launch(res: ServerResponse, prepare: () => Promise<PendingJob>) {
+    if (!runner.claim()) return busy(res);
+    let pending: PendingJob;
+    try {
+      pending = await prepare();
+    } catch (error) {
+      runner.release();
+      throw error;
+    }
+    json(res, 202, {id: runner.start(pending)});
   }
 
-  function fingerprint(providers: ReturnType<typeof paidProviders>, video: boolean) {
-    const config = {...providers, image: video ? undefined : providers.image};
-    const safe = JSON.stringify(config, (key, value) => (key === 'apiKey' ? undefined : value));
-    return createHash('sha256').update(safe).digest('hex');
+  async function voice(req: IncomingMessage, res: ServerResponse) {
+    if (!runner.claim()) return busy(res);
+    try {
+      await previewVoice(req, res);
+    } finally {
+      runner.release();
+    }
+  }
+
+  async function removeJob(res: ServerResponse, id: string) {
+    if (runner.activeId === id) return json(res, 409, {error: 'Stop the generation before deleting it.'});
+    if (!(await readJob(id))) return json(res, 404, {error: 'Job not found.'});
+    await deleteJob(id);
+    json(res, 200, {});
+  }
+
+  async function route(req: IncomingMessage, res: ServerResponse, path: string) {
+    const {id, resource} = jobRoute(path);
+    if (req.method === 'GET') {
+      if (path === '/api/studio/jobs') return json(res, 200, await listJobs(runner.activeId));
+      const job = id && (runner.activeJob(id) ?? (await readJob(id)));
+      return id && job ? sendJobResource(req, res, id, job, resource) : notFound(res);
+    }
+    if (req.method !== 'POST' && req.method !== 'DELETE') return notFound(res);
+    if (req.headers['x-short-studio'] !== '1')
+      return json(res, 403, {error: 'Studio request header missing.'});
+    if (req.method === 'DELETE')
+      return id && !resource ? removeJob(res, id) : json(res, 404, {error: 'Job not found.'});
+    if (id && resource === 'cancel' && runner.cancel(id)) return json(res, 202, {});
+    if (id && resource === 'resume') return launch(res, () => resumeJob(req, id));
+    if (path === '/api/studio/voice') return voice(req, res);
+    if (path === '/api/studio/local') return launch(res, () => startLocal(req));
+    if (path === '/api/studio/paid') return launch(res, () => startPaid(req));
+    if (path === '/api/studio/export') return launch(res, () => startExport(req));
+    return notFound(res);
   }
 
   const handle = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const path = req.url?.split('?')[0] ?? '';
     if (!path.startsWith('/api/studio/')) return next();
-    const host = req.headers.host ?? '';
-    if (
-      !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host) ||
-      (req.headers.origin && req.headers.origin !== `http://${host}`)
-    ) {
-      return json(res, 403, {error: 'Open Short Studio using its local address.'});
-    }
-
+    if (!isLocalRequest(req)) return json(res, 403, {error: 'Open Short Studio using its local address.'});
     try {
-      const match = path.match(/^\/api\/studio\/jobs\/([a-f0-9-]+)(?:\/(.+))?$/);
-      const id = match && idPattern.test(match[1]) ? match[1] : undefined;
-      const resource = match?.[2];
-      if (req.method === 'GET' && path === '/api/studio/jobs')
-        return json(res, 200, await listJobs(active?.id));
-      if (req.method === 'POST' || req.method === 'DELETE') {
-        if (req.headers['x-short-studio'] !== '1')
-          return json(res, 403, {error: 'Studio request header missing.'});
-        if (id && resource === 'cancel' && req.method === 'POST' && active?.id === id) {
-          active.controller.abort();
-          return json(res, 202, {});
-        }
-        if (id && req.method === 'DELETE' && !resource) {
-          if (active?.id === id) return json(res, 409, {error: 'Stop the generation before deleting it.'});
-          if (!(await readJob(id))) return json(res, 404, {error: 'Job not found.'});
-          await deleteJob(id);
-          return json(res, 200, {});
-        }
-        if (id && resource === 'resume' && req.method === 'POST') {
-          if (rendering || narrating) return json(res, 409, {error: 'Another generation is running.'});
-          rendering = true;
-          try {
-            const job = await readJob(id);
-            if (!job?.draft || !['Failed', 'Cancelled'].includes(job.phase))
-              throw new Error('This job has no resumable project.');
-            if (job.local?.mode === 'prepare' && job.draft === 'local-storyboard.json') {
-              const settings = job.local.settings;
-              const saved = JSON.parse(await readFile(join(jobDirectory(id), job.draft), 'utf8')) as unknown;
-              const board = localStoryboardSchema(settings).parse(saved) as LocalStoryboard;
-              job.error = undefined;
-              job.startedAt = Date.now();
-              job.phase = 'Preparing scenes';
-              await saveJob(id, job);
-              return json(res, 202, {
-                id: startJob(id, job, (signal) => prepareLocalJob(board, settings, job, id, signal)),
-              });
-            }
-            if (!job.paid && job.draft === 'project.json') {
-              job.error = undefined;
-              job.startedAt = Date.now();
-              job.phase = 'Rendering video';
-              await saveJob(id, job);
-              return json(res, 202, {
-                id: startJob(id, job, (signal) => renderJob(job, id, signal)),
-              });
-            }
-            if (!job.paid) throw new Error('This job has no resumable storyboard.');
-            const input = paidRequest.parse(await readJson(req));
-            const {mode, video} = job.paid;
-            const providers = paidProviders(mode === 'plan', input.selection, video, mode !== 'plan');
-            if (fingerprint(providers, video) !== job.paid.fingerprint)
-              throw new Error('Select the original providers and models before resuming.');
-            const videoKey = video ? (input.videoKey ?? setting('FAL_KEY')) : undefined;
-            if (video && !videoKey) throw new Error('Restore the fal API key before resuming.');
-            if (input.resumeLimit !== undefined && job.estimate) {
-              if (input.resumeLimit < job.estimate.limit)
-                throw new Error('The new limit must be at least the original limit.');
-              job.estimate.limit = input.resumeLimit;
-            }
-            job.phase = 'Preparing scenes';
-            job.error = undefined;
-            job.startedAt = Date.now();
-            await saveJob(id, job);
-            return json(res, 202, {
-              id: startJob(id, job, (signal) => queuePaid({mode}, providers, job, id, {signal, videoKey})),
-            });
-          } catch (error) {
-            rendering = false;
-            throw error;
-          }
-        }
-        if (req.method === 'DELETE') return json(res, 404, {error: 'Job not found.'});
-        if (path === '/api/studio/voice') {
-          if (narrating || rendering) return json(res, 409, {error: 'Another generation is running.'});
-          narrating = true;
-          let directory: string | undefined;
-          try {
-            const {narration, kokoroVoice} = z
-              .object({
-                narration: z.string().trim().min(1).max(4000),
-                kokoroVoice: kokoroVoiceSchema.optional(),
-              })
-              .parse(await readJson(req));
-            directory = await mkdtemp(join(tmpdir(), 'short-studio-'));
-            await generateNarration([{index: 1, narration, kokoroVoice}], directory, directory);
-            const audio = await readFile(join(directory, 'scene-1.wav'));
-            res.writeHead(200, {'Content-Type': 'audio/wav', 'Cache-Control': 'no-store'});
-            return res.end(audio);
-          } finally {
-            narrating = false;
-            if (directory) await rm(directory, {recursive: true, force: true});
-          }
-        }
-        if (path === '/api/studio/export' || path === '/api/studio/paid' || path === '/api/studio/local') {
-          if (rendering || narrating) return json(res, 409, {error: 'Another generation is running.'});
-          rendering = true;
-          let upload: Upload | undefined;
-          try {
-            if (path.endsWith('/local')) {
-              const decoded = await readJson(req);
-              const mode = z.object({mode: z.enum(['direct', 'plan', 'prepare'])}).parse(decoded).mode;
-              if (mode === 'prepare') {
-                const input = localPrepareRequest.parse(decoded);
-                const job = await readJob(input.planId);
-                if (
-                  !job ||
-                  !['Complete', 'Failed', 'Cancelled'].includes(job.phase) ||
-                  !job.local ||
-                  !['plan', 'prepare'].includes(job.local.mode) ||
-                  job.draft !== 'local-storyboard.json'
-                )
-                  throw new Error('Review a completed local storyboard before preparing scenes.');
-                const settings = localSettings.parse(job.local.settings);
-                const board = localStoryboardSchema(settings).parse(input.board) as LocalStoryboard;
-                job.local = {mode: 'prepare', settings};
-                job.phase = 'Preparing scenes';
-                job.progress = 0;
-                job.startedAt = Date.now();
-                job.error = undefined;
-                job.detail = 'Preparing approved storyboard';
-                await writeJson(join(jobDirectory(input.planId), 'local-storyboard.json'), {
-                  ...board,
-                  settings,
-                });
-                await saveJob(input.planId, job);
-                return json(res, 202, {
-                  id: startJob(input.planId, job, (signal) =>
-                    prepareLocalJob(board, settings, job, input.planId, signal),
-                  ),
-                });
-              }
-              const input = localGenerationRequest.parse(decoded);
-              const {topic, mode: generationMode, ...settings} = input;
-              const id = randomUUID();
-              const job = await createJob(id);
-              job.local = {mode: generationMode, settings};
-              await saveJob(id, job);
-              const directory = jobDirectory(id);
-              return json(res, 202, {
-                id: startJob(id, job, async (signal) => {
-                  if (generationMode === 'plan') {
-                    const board = await planLocalTopic(
-                      topic,
-                      (detail) => {
-                        job.detail = detail;
-                      },
-                      signal,
-                      settings,
-                    );
-                    await writeJson(join(directory, 'local-storyboard.json'), {...board, settings});
-                    job.draft = 'local-storyboard.json';
-                    await saveJob(id, job);
-                    return;
-                  }
-                  const project = await buildLocalTopic(
-                    topic,
-                    directory,
-                    (detail) => {
-                      job.detail = detail;
-                    },
-                    signal,
-                    settings,
-                  );
-                  await writeJson(join(directory, 'project.json'), projectSchema.parse(project));
-                  job.draft = 'project.json';
-                  await renderJob(job, id, signal);
-                }),
-              });
-            }
-            if (path.endsWith('/paid')) {
-              if (req.headers['content-type']?.startsWith('multipart/form-data;'))
-                upload = await parseUpload(req);
-              const form = upload;
-              const decoded: unknown = form
-                ? JSON.parse(String(form.fields.get('request')))
-                : await readJson(req);
-              const input = paidRequest.parse(decoded);
-              const track = form?.files.has('music') ? uploadPart(form, 'music') : undefined;
-              if (track && input.mode === 'plan')
-                throw new Error('A storyboard-only run cannot include a soundtrack.');
-              if (input.mode === 'plan' ? !input.topic : !input.board)
-                throw new Error('Review a storyboard before preparing paid scenes.');
-              const providers = paidProviders(
-                input.mode === 'plan',
-                input.selection,
-                input.video,
-                input.mode !== 'plan',
-              );
-              const videoKey =
-                input.video && input.mode !== 'plan' ? (input.videoKey ?? setting('FAL_KEY')) : undefined;
-              if (input.video && !videoKey) throw new Error('Enter a fal API key or set FAL_KEY.');
-              if (input.estimate) {
-                const {script, visual, voice, limit} = input.estimate;
-                const estimate =
-                  input.mode === 'plan'
-                    ? script
-                    : (visual + (providers.voice?.provider === 'kokoro' ? 0 : voice)) *
-                      (input.board?.scenes.length ?? 0);
-                if (estimate > limit + 1e-8) throw new Error('Estimated provider charges exceed your limit.');
-              }
-              const id = randomUUID();
-              const job = await createJob(id, {
-                mode: input.mode,
-                video: input.video,
-                fingerprint: fingerprint(providers, input.video),
-              });
-              job.estimate = input.estimate;
-              job.usage = {script: 0, visual: 0, voice: 0};
-              await saveJob(id, job);
-              if (track) await copyFile(track, join(jobDirectory(id), 'soundtrack.source'));
-              if (input.board) {
-                await writeJson(join(jobDirectory(id), 'storyboard.json'), input.board);
-                job.draft = 'storyboard.json';
-                await saveJob(id, job);
-              }
-              return json(res, 202, {
-                id: startJob(id, job, (signal) =>
-                  queuePaid(input, providers, job, id, {signal, videoKey}).finally(() => form?.cleanup()),
-                ),
-              });
-            }
-            const form = await parseUpload(req);
-            upload = form;
-            const id = randomUUID();
-            const job = await createJob(id);
-            return json(res, 202, {
-              id: startJob(id, job, (signal) => queueExport(form, job, id, signal).finally(form.cleanup)),
-            });
-          } catch (error) {
-            rendering = false;
-            await upload?.cleanup();
-            throw error;
-          }
-        }
-      }
-
-      const job = id ? (active?.id === id ? active.job : await readJob(id)) : undefined;
-      if (req.method === 'GET' && id && job) {
-        if (!resource) {
-          return json(res, 200, {
-            phase: job.phase,
-            progress: job.progress,
-            error: job.error,
-            detail: job.detail,
-            startedAt: job.startedAt,
-            usage: job.usage,
-            spendingLimit: job.estimate?.limit,
-            estimatedSpend: job.usage && job.estimate ? estimatedSpend(job.usage, job.estimate) : undefined,
-            resumable: !!job.draft && (job.phase === 'Failed' || job.phase === 'Cancelled'),
-            resumeNeedsProviders: !!job.paid,
-            hasVideo: !!job.file,
-            hasDraft: !!job.draft,
-            hasStoryboard: job.draft === 'local-storyboard.json',
-            localMode: job.local?.mode,
-          });
-        }
-        if (job.phase === 'Complete' && resource === 'video' && job.file)
-          return await serveMedia(req, res, job.file, 'video/mp4');
-        if (resource === 'draft' && job.draft) {
-          const manifest = JSON.parse(await readFile(join(jobDirectory(id), job.draft), 'utf8')) as unknown;
-          if (job.draft === 'project.json') return json(res, 200, {kind: 'project', manifest});
-          if (job.draft === 'local-storyboard.json' && job.local) {
-            return json(res, 200, {
-              kind: 'local-storyboard',
-              manifest: {
-                ...localStoryboardSchema(job.local.settings).parse(manifest),
-                settings: job.local.settings,
-              },
-            });
-          }
-          const board = paidBoardSchema.parse(manifest);
-          const scenes = await Promise.all(
-            board.scenes.map(async (scene, index) => {
-              const filename = `scene-${index + 1}`;
-              const prepared = await readOptional(join(jobDirectory(id), `${filename}.json`));
-              return prepared ? JSON.parse(prepared.toString()) : scene;
-            }),
-          );
-          return json(res, 200, {kind: 'storyboard', manifest: {...board, scenes}});
-        }
-        const asset = resource.match(/^assets\/((?:scene-\d+\.(?:jpg|mp4|wav))|music\.wav)$/);
-        if (asset && job.draft) {
-          const filename = asset[1];
-          const mime = filename.endsWith('.jpg')
-            ? 'image/jpeg'
-            : filename.endsWith('.mp4')
-              ? 'video/mp4'
-              : 'audio/wav';
-          return await serveMedia(req, res, join(jobDirectory(id), 'assets', filename), mime);
-        }
-      }
-      return json(res, 404, {error: 'Studio resource not found.'});
+      await route(req, res, path);
     } catch (error) {
-      if (!res.headersSent)
-        return json(res, 400, {error: error instanceof Error ? error.message : String(error)});
+      if (!res.headersSent) return json(res, 400, {error: errorMessage(error)});
       res.end();
     }
   };

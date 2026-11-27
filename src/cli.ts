@@ -2,6 +2,7 @@ import {access, mkdir, mkdtemp, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 import {parseArgs} from 'node:util';
 import {demoProject} from './demo.ts';
+import {errorMessage} from './errors.ts';
 import {parseKokoroVoice} from './kokoro-voices.ts';
 import {localSettings} from './local-settings.ts';
 import {buildLocalTopic} from './local-topic.ts';
@@ -161,6 +162,6 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(errorMessage(error));
   process.exitCode = 1;
 });

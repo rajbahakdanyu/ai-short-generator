@@ -223,6 +223,82 @@ test('Studio resumes paid jobs across a restart and only retries missing assets'
   }
 });
 
+test('Studio API guards requests and shares one generation slot', async () => {
+  const workspace = process.cwd();
+  const directory = await mkdtemp(join(tmpdir(), 'short-studio-routes-'));
+  const stalled = createHttpServer(() => {});
+  await new Promise<void>((resolve) => stalled.listen(0, '127.0.0.1', resolve));
+  let studio: ViteDevServer | undefined;
+  try {
+    process.chdir(directory);
+    studio = await createServer({
+      configFile: false,
+      cacheDir: join(directory, 'vite-cache'),
+      plugins: [studioApi()],
+      server: {host: '127.0.0.1', port: 0, watch: null},
+    });
+    await studio.listen();
+    assert.ok(studio.httpServer);
+    const base = `${serverAddress(studio.httpServer)}/api/studio`;
+    const missingId = '00000000-0000-4000-8000-000000000000';
+    async function expect(path: string, status: number, error: string | undefined, init?: RequestInit) {
+      const res = await fetch(`${base}/${path}`, init);
+      const value = await res.json();
+      assert.equal(res.status, status, `${init?.method ?? 'GET'} ${path}: ${JSON.stringify(value)}`);
+      assert.equal(value.error, error);
+      return value;
+    }
+
+    await expect('jobs', 403, 'Open Short Studio using its local address.', {
+      headers: {Origin: 'http://example.com'},
+    });
+    await expect('export', 403, 'Studio request header missing.', {method: 'POST'});
+    await expect('jobs/not-an-id', 404, 'Job not found.', {method: 'DELETE', headers});
+    await expect(`jobs/${missingId}`, 404, 'Job not found.', {method: 'DELETE', headers});
+    await expect(`jobs/${missingId}/cancel`, 404, 'Studio resource not found.', {method: 'POST', headers});
+    await expect(`jobs/${missingId}/resume`, 400, 'This job has no resumable project.', {
+      method: 'POST',
+      headers,
+    });
+    await expect(`jobs/${missingId}`, 404, 'Studio resource not found.');
+    await expect('jobs', 404, 'Studio resource not found.', {method: 'PUT', headers});
+    assert.deepEqual(await expect('jobs', 200, undefined), []);
+
+    const config = {
+      provider: 'compatible',
+      apiKey: 'fake',
+      baseUrl: serverAddress(stalled),
+      model: 'fixture',
+    };
+    const {id} = await expect('paid', 202, undefined, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({mode: 'plan', topic: 'Test', selection: {script: config}}),
+    });
+    await expect('voice', 409, 'Another generation is running.', {method: 'POST', headers, body: '{}'});
+    await expect(`jobs/${id}`, 409, 'Stop the generation before deleting it.', {method: 'DELETE', headers});
+    assert.equal((await expect('jobs', 200, undefined))[0].phase, 'Running');
+    await expect(`jobs/${id}/cancel`, 202, undefined, {method: 'POST', headers});
+    let listed = {phase: 'Running'};
+    for (let attempt = 0; attempt < 100 && listed.phase === 'Running'; attempt++) {
+      await setTimeout(50);
+      [listed] = await expect('jobs', 200, undefined);
+    }
+    assert.equal(listed.phase, 'Cancelled');
+    const cancelled = await (await fetch(`${base}/jobs/${id}`)).json();
+    assert.match(cancelled.error, /Provider calls already submitted may still be charged/);
+    const released = await fetch(`${base}/voice`, {method: 'POST', headers, body: '{}'});
+    assert.equal(released.status, 400);
+    await expect(`jobs/${id}`, 200, undefined, {method: 'DELETE', headers});
+  } finally {
+    await studio?.close();
+    stalled.closeAllConnections();
+    await new Promise<void>((resolve) => stalled.close(() => resolve()));
+    process.chdir(workspace);
+    await rm(directory, {recursive: true, force: true});
+  }
+});
+
 test('Upload parsing stores files and enforces multipart limits', async () => {
   const server = createHttpServer(async (req, res) => {
     try {

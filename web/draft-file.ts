@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {kokoroVoiceSchema, maxCaptions, maxScenes, projectVersion, sceneFrames} from '../src/project.ts';
-import {type Asset, assetBlob, type Draft} from './model.ts';
+import {assetBlob} from './assets.ts';
+import type {Asset, Draft} from './model.ts';
 
 const maxFileBytes = 256 * 1024 * 1024;
 const encodedAsset = z.object({
