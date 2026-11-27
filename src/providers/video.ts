@@ -8,6 +8,7 @@ import {ProviderHttpError, readProviderJson, request} from './http.ts';
 
 const videoModel = 'fal-ai/wan/v2.7/text-to-video';
 const requestId = z.uuid();
+const pendingSubmission = 'pending';
 const queueStatus = z.object({
   status: z.enum(['IN_QUEUE', 'IN_PROGRESS', 'COMPLETED']),
   error: z.string().nullish(),
@@ -37,17 +38,31 @@ export async function generateClip(
     officialOpenAi: false,
     signal,
   };
-  const saved = await readOptional(checkpoint);
+  const saved = (await readOptional(checkpoint))?.toString();
   let id: string;
-  if (saved) id = requestId.parse(saved.toString());
+  if (saved === pendingSubmission) {
+    // A previous submission may have been accepted (and billed) before its ID was saved.
+    await rm(checkpoint, {force: true});
+    throw new Error(
+      'A previous fal video request was interrupted before its ID was saved and may still be billed. Check your fal dashboard, then resume again to submit a new request.',
+    );
+  }
+  if (saved) id = requestId.parse(saved);
   else {
     await beforeSubmit?.();
-    const response = await request(config, `/${videoModel}`, {
-      prompt,
-      aspect_ratio: '9:16',
-      resolution: '720p',
-      duration: 5,
-    });
+    await writeAtomic(checkpoint, pendingSubmission);
+    let response: Response;
+    try {
+      response = await request(config, `/${videoModel}`, {
+        prompt,
+        aspect_ratio: '9:16',
+        resolution: '720p',
+        duration: 5,
+      });
+    } catch (error) {
+      if (error instanceof ProviderHttpError) await rm(checkpoint, {force: true});
+      throw error;
+    }
     id = z.object({request_id: requestId}).parse(await readProviderJson(response, 1024 * 1024)).request_id;
     await writeAtomic(checkpoint, id);
   }

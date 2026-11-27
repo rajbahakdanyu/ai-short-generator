@@ -344,7 +344,7 @@ export function SceneInspector({
                 <Button
                   size="compact-xs"
                   variant="subtle"
-                  disabled={cues.length >= maxCaptions}
+                  disabled={cues.length >= maxCaptions || cue.text.trim().split(/\s+/).length < 2}
                   onClick={() => {
                     const middle = (cue.start + cue.end) / 2;
                     const words = cue.text.trim().split(/\s+/);
@@ -353,7 +353,7 @@ export function SceneInspector({
                       captions: [
                         ...cues.slice(0, i),
                         {...cue, end: middle, text: words.slice(0, split).join(' ')},
-                        {...cue, start: middle, text: words.slice(split).join(' ') || cue.text},
+                        {...cue, start: middle, text: words.slice(split).join(' ')},
                         ...cues.slice(i + 1),
                       ],
                     });

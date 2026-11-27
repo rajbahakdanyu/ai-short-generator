@@ -98,3 +98,37 @@ test('an expired fal checkpoint is cleared without automatically submitting anot
     await rm(directory, {recursive: true, force: true});
   }
 });
+
+test('an interrupted fal submission is not resubmitted automatically', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'fal-pending-test-'));
+  try {
+    const checkpoint = join(directory, 'request');
+    const fetchMock = context.mock.method(globalThis, 'fetch', async () => {
+      throw new TypeError('fetch failed');
+    });
+    await assert.rejects(generateClip('test-key', 'A scene', checkpoint, {}), /Could not reach fal/);
+    assert.equal((await readFile(checkpoint)).toString(), 'pending');
+    await assert.rejects(
+      generateClip('test-key', 'A scene', checkpoint, {
+        beforeSubmit: async () => assert.fail('Unexpected new paid request'),
+      }),
+      /may still be billed/,
+    );
+    assert.equal(fetchMock.mock.callCount(), 1);
+    await assert.rejects(readFile(checkpoint), {code: 'ENOENT'});
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
+});
+
+test('a rejected fal submission clears its pending marker', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'fal-rejected-test-'));
+  try {
+    const checkpoint = join(directory, 'request');
+    context.mock.method(globalThis, 'fetch', async () => new Response(null, {status: 401}));
+    await assert.rejects(generateClip('test-key', 'A scene', checkpoint, {}), /HTTP 401/);
+    await assert.rejects(readFile(checkpoint), {code: 'ENOENT'});
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
+});

@@ -6,6 +6,7 @@ import {
   ActionIcon,
   Alert,
   Button,
+  Checkbox,
   createTheme,
   MantineProvider,
   Menu,
@@ -111,6 +112,7 @@ function Studio() {
     );
   }
   const [topic, setTopic] = useState('');
+  const [factCheckAccepted, setFactCheckAccepted] = useState(false);
   const [script, setScript] = useState('');
   const {job, setJob, running, pollError} = useStudioJobs();
   const [outputs, setOutputs] = useState<{id: string; startedAt: number; phase: string; bytes: number}[]>([]);
@@ -959,10 +961,17 @@ function Studio() {
                   onChange={(event) => setSettings({...settings, style: event.currentTarget.value})}
                 />
               )}
+              <Checkbox
+                label="I will fact-check the generated narration before publishing"
+                description="Local models can state incorrect facts. Studio does not verify claims."
+                checked={factCheckAccepted}
+                onChange={(event) => setFactCheckAccepted(event.currentTarget.checked)}
+              />
               <Button
                 className="primary"
                 disabled={
                   !topic.trim() ||
+                  !factCheckAccepted ||
                   (settings.format !== 'animated' && !settings.style.trim()) ||
                   running ||
                   !!voiceScene

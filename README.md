@@ -23,7 +23,7 @@ pnpm setup:local
 pnpm studio
 ```
 
-**3. Generate a video.** Click **Start with a topic** in the welcome panel, or choose **Generate → Local generation**. Try “How do fireflies glow?” Keep the default settings and click **Generate MP4**. When the render finishes, click **Download MP4**. You can find the result again under **Generate → Generation history**.
+**3. Generate a video.** Click **Start with a topic** in the welcome panel, or choose **Generate → Local generation**. Try “How do fireflies glow?” Keep the default settings, confirm that you will fact-check the narration, and click **Generate MP4**. Local models can state incorrect facts, and Studio does not verify claims, so review the script before you publish. When the render finishes, click **Download MP4**. You can find the result again under **Generate → Generation history**.
 
 **Want to explore first?** The editor opens with a narrated black-hole sample. Click Play in the preview to watch it, select a scene to edit it, or click **Export MP4** to render the current draft. To try just the editor and sample before downloading models, install Node.js, pnpm and FFmpeg, then run `pnpm install --frozen-lockfile` and `pnpm studio`. The first export may download the rendering browser.
 
@@ -59,7 +59,7 @@ For paid generation, start with **Generate → Paid generation → Storyboard on
 
 Custom API endpoints require an explicit key when entered in Studio and must use HTTPS outside loopback. Asset downloads from providers require public HTTPS. Keys entered in Studio are kept in tab memory and excluded from job and project files. Leave fields blank to use `.env` settings or provider defaults.
 
-**Generate → Generation history** shows job status and disk size and lets you reopen or explicitly delete output. Failed or stopped paid jobs can resume from their saved storyboard and reuse completed assets. Failed local exports can retry rendering once the prepared project exists. Re-enter any tab-only provider settings after a reload. Stopping a job halts local processing and new requests. Work already accepted by the provider may finish and incur charges.
+**Generate → Generation history** shows job status and disk size and lets you reopen or explicitly delete output. Failed or stopped paid jobs can resume from their saved storyboard and reuse completed assets. Failed local exports can retry rendering once the prepared project exists. Re-enter any tab-only provider settings after a reload. Stopping a job halts local processing and new requests. Work already accepted by the provider may finish and incur charges. If Studio stops while a fal video request is being submitted, the next resume stops before sending the request again because the first attempt may already be billed. Check your fal dashboard, then resume again to submit a new request.
 
 Studio listens on loopback. The editor and local MP4 export make no paid API calls. Studio accepts up to 256 MB per upload and 64 MB per file. Visuals support up to 4096 pixels per side. Prepared projects support up to 100 scenes, two minutes per scene, and ten minutes total.
 
@@ -224,3 +224,7 @@ The four bundled JPEGs in `demo/` were created with the built-in ImageGen tool. 
 4. A deep-space wide shot with a thin, asymmetric golden arc and a vast field of cold stars.
 
 The moving demo shot is adapted from NASA Goddard Space Flight Center and Jeremy Schnittman’s [Black Hole Accretion Disk Visualization](https://svs.gsfc.nasa.gov/13326/).
+
+## Licensing
+
+Studio uses [Remotion](https://www.remotion.dev/) to preview and render video. Remotion has its own license, and some companies need a paid company license. Read the [Remotion license terms](https://www.remotion.dev/license) before you use Short Studio commercially.
