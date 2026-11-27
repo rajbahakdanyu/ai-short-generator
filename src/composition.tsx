@@ -11,6 +11,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
+import {DiagramClip} from './diagram.tsx';
 import {FPS, type Scene} from './project.ts';
 
 type PlaybackScene = Omit<Scene, 'audio'> & {audio?: string};
@@ -51,7 +52,19 @@ function Slide({
   const Video = preview ? Html5Video : OffthreadVideo;
   return (
     <AbsoluteFill style={{backgroundColor: '#0b0d15', overflow: 'hidden'}}>
-      {scene.video ? (
+      {scene.diagram ? (
+        <div
+          style={{
+            position: 'absolute',
+            width: 720,
+            height: 1280,
+            transform: 'scale(1.5)',
+            transformOrigin: 'top left',
+          }}
+        >
+          <DiagramClip {...scene.diagram} />
+        </div>
+      ) : scene.video ? (
         <Video
           muted
           loop={preview}

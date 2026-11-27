@@ -1,4 +1,4 @@
-import {AbsoluteFill, useCurrentFrame, useVideoConfig} from 'remotion';
+import {AbsoluteFill, useCurrentFrame} from 'remotion';
 import {z} from 'zod';
 
 const label = z.string().trim().min(1).max(22);
@@ -11,8 +11,7 @@ export type Diagram = z.infer<typeof diagramSchema>;
 
 export function DiagramClip({heading, layout, labels}: Diagram) {
   const frame = useCurrentFrame();
-  const {durationInFrames} = useVideoConfig();
-  const progress = frame / durationInFrames;
+  const progress = (frame % 90) / 90;
   const points =
     layout === 'pipeline'
       ? [

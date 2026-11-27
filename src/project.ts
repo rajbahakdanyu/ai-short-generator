@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {diagramSchema} from './diagram.tsx';
 import {kokoroVoices} from './kokoro-voices.ts';
 import {FPS} from './timing.ts';
 
@@ -81,6 +82,7 @@ export const projectSchema = z
               .string()
               .regex(/^scene-\d+\.mp4$/)
               .optional(),
+            diagram: diagramSchema.optional(),
             audio: audioFilename,
             frames: sceneFrames,
             captions: sceneCaptions,

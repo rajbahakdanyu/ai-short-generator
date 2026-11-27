@@ -86,6 +86,8 @@ export async function renderShort(
       serveUrl,
       inputProps,
       codec: 'h264',
+      offthreadVideoCacheSizeInBytes: 256 * 1024 * 1024,
+      offthreadVideoThreads: 2,
       audioCodec: 'aac',
       pixelFormat: 'yuv420p',
       outputLocation: temporaryOutput,

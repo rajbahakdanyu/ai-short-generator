@@ -26,9 +26,7 @@ export async function buildLocalTopic(
 ) {
   const settings = localSettings.parse(options ?? {});
   const animated = settings.format === 'animated';
-  const diagramScene = scene
-    .omit({imagePrompt: true})
-    .extend({diagram: diagramSchema, narration: z.string().trim().min(1).max(180)});
+  const diagramScene = z.object({diagram: diagramSchema, narration: scene.shape.narration});
   const plan = z.object({
     title: z.string().trim().min(1).max(200),
     scenes: z.array(animated ? diagramScene : scene).length(settings.scenes),
@@ -52,7 +50,7 @@ export async function buildLocalTopic(
     }),
   );
   const visualInstruction = animated
-    ? 'Explain the concept step by step. Each diagram shows exactly three named objects. For pipeline the labels mean [source, middle, destination]. For fan-out they mean [source, destination A, destination B]. For fan-in they mean [input A, input B, destination]. Follow any layout requested by the user. Narrate only what this diagram shows in one sentence under 22 words.'
+    ? 'Explain the concept step by step. Each diagram shows exactly three named objects. Copy specific nouns from the topic into the labels. In a pipeline connect the three labels in order. In fan-out the first label sends to the other two; in fan-in the first two send to the third. Follow any layout requested by the user. Narrate only what this diagram shows in one sentence under 22 words.'
     : 'Each imagePrompt describes visible subjects and setting for that sentence.';
   const prompt = `Write a short educational video about ${localTopic.parse(topic)}. Give it a title and exactly ${settings.scenes} scenes. Each narration is one clear, accurate spoken sentence. ${visualInstruction} Return JSON only.`;
   report(`Writing the script with ${basename(weights)}`);
@@ -85,6 +83,7 @@ export async function buildLocalTopic(
     settings,
     scenes: board.scenes.map((scene, i) => ({
       ...scene,
+      narration: animated ? scene.narration.replace(/\*\*|__/g, '') : scene.narration,
       kokoroVoice: settings.voice,
       ...(animated
         ? {video: `diagram-${i + 1}.mp4`, name: 'diagram' in scene ? scene.diagram.heading : undefined}
@@ -108,5 +107,11 @@ export async function buildLocalTopic(
     });
   }
   report('Generating narration and captions');
-  return buildStoryboard(await readStoryboard(path), directory, [], undefined, signal, speech);
+  const project = await buildStoryboard(await readStoryboard(path), directory, [], undefined, signal, speech);
+  if (animated) {
+    project.scenes.forEach((scene, i) => {
+      scene.diagram = diagramScene.parse(board.scenes[i]).diagram;
+    });
+  }
+  return project;
 }
