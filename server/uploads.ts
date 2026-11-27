@@ -5,14 +5,16 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {Transform} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
-import busboy from 'busboy';
+import {Busboy} from '@fastify/busboy';
 
 const maxUpload = 256 * 1024 * 1024;
 
 export async function parseUpload(req: IncomingMessage) {
   if (Number(req.headers['content-length']) > maxUpload) throw new Error('Upload exceeds 256 MB.');
-  const parser = busboy({
-    headers: req.headers,
+  const contentType = req.headers['content-type'];
+  if (!contentType) throw new Error('Upload must be sent as multipart form data.');
+  const parser = new Busboy({
+    headers: {...req.headers, 'content-type': contentType},
     limits: {fieldSize: 512_000, files: 201, fields: 1, parts: 203, fileSize: 64 * 1024 * 1024},
   });
   const directory = await mkdtemp(join(tmpdir(), 'short-studio-upload-'));
@@ -38,8 +40,8 @@ export async function parseUpload(req: IncomingMessage) {
       }),
     );
   });
-  parser.on('field', (key, value, info) => {
-    if (info.valueTruncated || info.nameTruncated) fail('Upload metadata is too large.');
+  parser.on('field', (key, value, nameTruncated, valueTruncated) => {
+    if (nameTruncated || valueTruncated) fail('Upload metadata is too large.');
     else fields.set(key, value);
   });
   for (const event of ['filesLimit', 'fieldsLimit', 'partsLimit'] as const)

@@ -139,7 +139,7 @@ main {
   margin-left: -7px;
   width: 100%;
 }
-.project-title input:hover {
+.project-title :where(input):hover {
   border-color: var(--line);
 }
 .project-meta {
@@ -508,11 +508,11 @@ main {
     opacity 150ms,
     border-color 150ms;
 }
-.timeline-strip button:hover,
-.timeline-strip button.active {
+.timeline-strip :where(button):hover,
+.timeline-strip :where(button).active {
   opacity: 1;
 }
-.timeline-strip button.active {
+.timeline-strip :where(button).active {
   border-color: var(--accent);
 }
 .timeline-strip .thumbnail {
@@ -604,7 +604,7 @@ main {
   width: 35px;
   height: 42px;
 }
-.upload-target > span:last-child {
+.upload-target > :where(span):last-child {
   min-width: 0;
   display: grid;
   gap: 3px;

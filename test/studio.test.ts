@@ -7,6 +7,7 @@ import {test} from 'node:test';
 import {setTimeout} from 'node:timers/promises';
 import {createServer, type ViteDevServer} from 'vite';
 import {studioApi} from '../server/studio-api.ts';
+import {parseUpload} from '../server/uploads.ts';
 import {run} from '../src/media.ts';
 
 const headers = {'X-Short-Studio': '1', 'Content-Type': 'application/json'};
@@ -219,5 +220,43 @@ test('Studio resumes paid jobs across a restart and only retries missing assets'
     await new Promise<void>((resolve) => provider.close(() => resolve()));
     process.chdir(workspace);
     await rm(directory, {recursive: true, force: true});
+  }
+});
+
+test('Upload parsing stores files and enforces multipart limits', async () => {
+  const server = createHttpServer(async (req, res) => {
+    try {
+      const upload = await parseUpload(req);
+      const file = upload.files.get('visual-0');
+      const bytes = file ? (await readFile(file)).byteLength : 0;
+      await upload.cleanup();
+      res.end(JSON.stringify({request: upload.fields.get('request'), bytes}));
+    } catch (error) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({error: error instanceof Error ? error.message : String(error)}));
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const base = serverAddress(server);
+  const send = async (body: FormData | Blob) => (await fetch(base, {method: 'POST', body})).json();
+  try {
+    const valid = new FormData();
+    valid.set('request', '{"mode":"paid"}');
+    valid.set('visual-0', new Blob([new Uint8Array(3)], {type: 'image/jpeg'}), 'scene.jpg');
+    assert.deepEqual(await send(valid), {request: '{"mode":"paid"}', bytes: 3});
+
+    const oversized = new FormData();
+    oversized.set('request', 'x'.repeat(512_001));
+    assert.deepEqual(await send(oversized), {error: 'Upload metadata is too large.'});
+
+    const duplicate = new FormData();
+    duplicate.append('visual-0', new Blob(['a']), 'a.jpg');
+    duplicate.append('visual-0', new Blob(['b']), 'b.jpg');
+    assert.deepEqual(await send(duplicate), {error: 'Duplicate upload field.'});
+
+    assert.deepEqual(await send(new Blob(['x'])), {error: 'Upload must be sent as multipart form data.'});
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });
