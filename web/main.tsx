@@ -577,11 +577,8 @@ function Studio() {
         {!guideDismissed && (
           <section className="welcome-panel" aria-labelledby="welcome-title">
             <div>
-              <h2 id="welcome-title">Make your first Short</h2>
-              <p>
-                Start with a topic and Studio will write, illustrate and narrate it on your Mac. To explore
-                the editor first, press Play in the preview below.
-              </p>
+              <h2 id="welcome-title">Create or edit a Short</h2>
+              <p>Start with a topic to create a storyboard, or press Play to explore the editor below.</p>
             </div>
             <Button
               className="primary"
@@ -623,7 +620,7 @@ function Studio() {
                 {job.phase}
               </Button>
             )}
-            <span>
+            <span aria-live="polite">
               <Check size={14} />{' '}
               {saveError ? 'Draft storage unavailable' : hydrated ? 'Saved on this device' : 'Loading draft'}
             </span>
@@ -712,6 +709,7 @@ function Studio() {
                 <NumberInput
                   label="Soundtrack volume (%)"
                   min={0}
+                  hideControls
                   max={100}
                   value={Math.round((draft.musicVolume ?? 0.13) * 100)}
                   onChange={(value) => {
@@ -778,6 +776,7 @@ function Studio() {
             patchScene={patchScene}
             moveScene={moveScene}
             removeScene={() => {
+              if (!window.confirm(`Delete "${scene.name}"? You can undo this from Project > Undo.`)) return;
               const remainder = draft.scenes.filter((s) => s.id !== scene.id);
               if (!remainder.length) return;
               setSelectedId(remainder[Math.min(index, remainder.length - 1)].id);
@@ -794,6 +793,7 @@ function Studio() {
       <Modal
         opened={dialog === 'library'}
         title="Saved projects"
+        closeButtonProps={{'aria-label': 'Close dialog'}}
         onClose={() => setDialog(undefined)}
         centered
       >
@@ -828,6 +828,7 @@ function Studio() {
       <Modal
         opened={dialog === 'outputs'}
         title="Generation history"
+        closeButtonProps={{'aria-label': 'Close dialog'}}
         onClose={() => setDialog(undefined)}
         centered
       >
@@ -882,6 +883,7 @@ function Studio() {
       )}
       <Modal
         opened={dialog === 'import'}
+        closeButtonProps={{'aria-label': 'Close dialog'}}
         onClose={() => {
           setIncoming(undefined);
           setDialog(undefined);
@@ -907,6 +909,7 @@ function Studio() {
       </Modal>
       <Modal
         opened={dialog === 'local'}
+        closeButtonProps={{'aria-label': 'Close dialog'}}
         onClose={() => setDialog(undefined)}
         title="Local generation"
         size="lg"
@@ -1018,6 +1021,7 @@ function Studio() {
       </Modal>
       <Modal
         opened={dialog === 'script'}
+        closeButtonProps={{'aria-label': 'Close dialog'}}
         onClose={() => setDialog(undefined)}
         title="Paste a script"
         centered
@@ -1039,6 +1043,7 @@ function Studio() {
       </Modal>
       <Modal
         opened={dialog === 'new' || dialog === 'sample'}
+        closeButtonProps={{'aria-label': 'Close dialog'}}
         onClose={() => setDialog(undefined)}
         title={dialog === 'new' ? 'Start a new project?' : 'Load the sample project?'}
         centered
@@ -1055,6 +1060,7 @@ function Studio() {
       </Modal>
       <Modal
         opened={dialog === 'export'}
+        closeButtonProps={{'aria-label': 'Close dialog'}}
         onClose={() => setDialog(undefined)}
         title="Generation and export"
         centered
@@ -1152,7 +1158,9 @@ function Studio() {
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing Short Studio root element.');
-createRoot(root).render(
+const appRoot = import.meta.hot?.data.root ?? createRoot(root);
+if (import.meta.hot) import.meta.hot.data.root = appRoot;
+appRoot.render(
   <MantineProvider theme={theme} forceColorScheme="dark">
     <Studio />
   </MantineProvider>,

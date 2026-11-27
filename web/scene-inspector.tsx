@@ -83,6 +83,7 @@ export function SceneInspector({
 }) {
   const [dragging, setDragging] = useState(false);
   const visualPicker = useRef<HTMLInputElement>(null);
+  const narrationPicker = useRef<HTMLInputElement>(null);
   function chooseVisual(file?: File) {
     if (!file) return;
     const video = file.type === 'video/mp4' || /\.mp4$/i.test(file.name);
@@ -253,6 +254,7 @@ export function SceneInspector({
           disabled={scene.voiceOutdated}
           description={scene.voiceOutdated ? 'Duration will be set from the new recording.' : undefined}
           min={1}
+          hideControls
           max={maxSceneFrames / FPS}
           value={framesFor(scene) / FPS}
           decimalScale={2}
@@ -263,32 +265,46 @@ export function SceneInspector({
             }
           }}
         />
-        <input
-          type="file"
-          accept="audio/*"
-          disabled={voiceBusy}
-          aria-label="Upload replacement narration"
-          onChange={async (event) => {
-            const file = event.currentTarget.files?.[0];
-            event.currentTarget.value = '';
-            if (
-              !file ||
-              (scene.captions &&
-                !window.confirm('Replacing narration resets edited caption timings. Continue?'))
-            )
-              return;
-            const context = new AudioContext();
-            try {
-              const seconds = (await context.decodeAudioData(await file.arrayBuffer())).duration;
-              if (seconds > 119) throw new Error('Narration must be shorter than two minutes.');
-              patchScene(scene.id, newRecording({name: file.name, kind: 'audio', source: file}, seconds));
-            } catch (issue) {
-              setError(String(issue));
-            } finally {
-              await context.close();
-            }
-          }}
-        />
+        <div>
+          <Button
+            type="button"
+            size="compact-sm"
+            variant="default"
+            leftSection={<Upload size={15} />}
+            disabled={voiceBusy}
+            onClick={() => narrationPicker.current?.click()}
+          >
+            Upload replacement narration
+          </Button>
+          <input
+            type="file"
+            hidden
+            ref={narrationPicker}
+            accept="audio/*"
+            disabled={voiceBusy}
+            aria-label="Upload replacement narration"
+            onChange={async (event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = '';
+              if (
+                !file ||
+                (scene.captions &&
+                  !window.confirm('Replacing narration resets edited caption timings. Continue?'))
+              )
+                return;
+              const context = new AudioContext();
+              try {
+                const seconds = (await context.decodeAudioData(await file.arrayBuffer())).duration;
+                if (seconds > 119) throw new Error('Narration must be shorter than two minutes.');
+                patchScene(scene.id, newRecording({name: file.name, kind: 'audio', source: file}, seconds));
+              } catch (issue) {
+                setError(String(issue));
+              } finally {
+                await context.close();
+              }
+            }}
+          />
+        </div>
         <details className="caption-panel">
           <summary>
             Captions{' '}
@@ -319,6 +335,7 @@ export function SceneInspector({
                       key={edge}
                       label={edge === 'start' ? 'Start (s)' : 'End (s)'}
                       aria-label={`Caption ${i + 1} ${edge}`}
+                      hideControls
                       error={edge === 'end' ? captionIssue(cues, i, framesFor(scene)) : undefined}
                       decimalScale={2}
                       step={0.05}

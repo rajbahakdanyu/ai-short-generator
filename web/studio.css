@@ -777,12 +777,19 @@ main {
   }
   .project-header {
     margin-bottom: 13px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .project-title {
+    flex: 1 1 100%;
   }
   .project-title input {
-    font-size: 22px;
+    font-size: clamp(18px, 5.5vw, 22px);
   }
   .project-meta {
     gap: 2px;
+    width: 100%;
+    justify-content: flex-end;
   }
   .workbench {
     grid-template-columns: minmax(0, 1fr);
@@ -915,6 +922,23 @@ main {
   grid-template-columns: minmax(90px, 1fr) minmax(0, 2fr);
   gap: 12px;
 }
+.paid-dialog-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 12px 0 2px;
+  border-top: 1px solid var(--line);
+  background: var(--mantine-color-body);
+}
+.paid-dialog-buttons {
+  margin-left: auto;
+}
 @media (max-width: 520px) {
   .topbar {
     height: auto;
@@ -928,6 +952,12 @@ main {
   }
   .generation-pair {
     grid-template-columns: 1fr;
+  }
+  .paid-dialog-actions {
+    gap: 4px;
+  }
+  .paid-dialog-buttons {
+    gap: 6px;
   }
 }
 

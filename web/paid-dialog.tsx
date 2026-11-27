@@ -99,6 +99,7 @@ export function PaidDialog({
         key={key}
         label={label}
         min={0}
+        hideControls
         value={prices[key]}
         onChange={(value) => setPrices((current) => ({...current, [key]: Number(value) || 0}))}
       />
@@ -128,6 +129,7 @@ export function PaidDialog({
       title={resume ? 'Resume generation' : 'Generate from a topic'}
       size="lg"
       centered
+      closeButtonProps={{'aria-label': 'Close dialog'}}
     >
       <form
         onSubmit={(event) => {
@@ -245,6 +247,7 @@ export function PaidDialog({
                 <NumberInput
                   label="Total estimated spending limit (USD)"
                   min={spendingLimit}
+                  hideControls
                   value={resumeLimit}
                   onChange={(value) => setResumeLimit(typeof value === 'number' ? value : undefined)}
                 />
@@ -423,8 +426,9 @@ export function PaidDialog({
             Keys you enter stay in this tab until you reload it. Blank fields use configured defaults. The
             selected providers may charge for this run.
           </Text>
-          <Group justify="space-between">
+          <div className="paid-dialog-actions">
             <Button
+              type="button"
               variant="subtle"
               color="gray"
               disabled={Object.keys(selection).length === 0}
@@ -432,8 +436,8 @@ export function PaidDialog({
             >
               Clear overrides
             </Button>
-            <Group>
-              <Button variant="default" onClick={close}>
+            <Group className="paid-dialog-buttons">
+              <Button type="button" variant="default" onClick={close}>
                 Cancel
               </Button>
               <Button
@@ -451,7 +455,7 @@ export function PaidDialog({
                       : 'Generate and export'}
               </Button>
             </Group>
-          </Group>
+          </div>
         </Stack>
       </form>
     </Modal>
