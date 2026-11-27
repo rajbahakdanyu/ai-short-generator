@@ -8,6 +8,7 @@
   "scripts": {
     "generate": "tsx src/cli.ts",
     "check": "biome check --error-on-warnings . && pnpm typecheck",
+    "setup:local": "bash scripts/setup-local.sh",
     "setup:voice": "bash scripts/setup-voice.sh",
     "studio": "vite",
     "build": "vite build",

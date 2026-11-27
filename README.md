@@ -1,6 +1,6 @@
 # AI Short Generator
 
-Make an illustrated or cinematic educational Short from your own storyboard or from a topic using a paid API. The storyboard workflow uses local Kokoro narration. Remotion adds motion and captions and exports the video locally in both workflows.
+Generate an illustrated educational Short entirely on your Mac from a topic. Studio also supports imported storyboards and optional paid providers. The storyboard workflow uses local Kokoro narration. Remotion adds motion and captions and exports the video locally in both workflows.
 
 ## Setup
 
@@ -11,7 +11,24 @@ brew install ffmpeg
 pnpm install --frozen-lockfile
 ```
 
-The first render may download Remotion's headless browser.
+For the complete local Studio setup on macOS, install Python 3.12 with `brew install python@3.12`, then run:
+
+```sh
+pnpm setup:local
+pnpm studio
+```
+
+The complete setup targets Apple Silicon Macs. It uses Homebrew for llama.cpp and downloads Gemma 3 1B, SD-Turbo, Kokoro, Python packages, and the rendering browser. Allow several gigabytes of disk space and internet access during setup.
+
+Open [Short Studio](http://127.0.0.1:5173/) and choose **Project → Generate locally from topic**. Enter a topic, choose 1–6 scenes and a narrator, describe the illustration style, then click **Generate MP4**. Studio remembers these settings in this browser. Gemma writes the narrated scenes, SD-Turbo illustrates each scene, Kokoro voices the script, and Remotion renders a captioned portrait MP4. Generation uses the installed models and needs no API key or internet connection. The separate paid option remains available.
+
+The same local workflow runs from the terminal:
+
+```sh
+pnpm generate --local-topic "How do fireflies glow?"
+```
+
+The CLI prints the output path. Use `--scenes 4 --style "Watercolour" --kokoro-voice bf_emma` to customise generation, or add `--prepare-only` to stop before rendering.
 
 ## Code checks
 

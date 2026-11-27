@@ -10,11 +10,14 @@ import {
   MantineProvider,
   Menu,
   Modal,
+  NativeSelect,
   NumberInput,
   Progress,
   Textarea,
+  TextInput,
   Tooltip,
 } from '@mantine/core';
+import {useLocalStorage} from '@mantine/hooks';
 import {
   ArrowDownToLine,
   Check,
@@ -37,6 +40,7 @@ import {
 import {lazy, Suspense, useEffect, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {defaultKokoroVoice, kokoroVoices} from '../src/kokoro-voices.ts';
+import {localSettings} from '../src/local-settings.ts';
 import {captionIssue, maxCaptions, maxProjectFrames, maxSceneFrames, maxScenes} from '../src/project.ts';
 import type {PaidSelection} from '../src/providers/catalog.ts';
 import {deleteSnapshot, listSnapshots, type Snapshot, saveSnapshot, useDraft} from './draft-state.ts';
@@ -74,9 +78,14 @@ function Studio() {
   const [error, setError] = useState('');
   const [voiceScene, setVoiceScene] = useState<string>();
   const [dialog, setDialog] = useState<
-    'script' | 'new' | 'sample' | 'export' | 'paid' | 'import' | 'library' | 'outputs'
+    'local' | 'script' | 'new' | 'sample' | 'export' | 'paid' | 'import' | 'library' | 'outputs'
   >();
   const [paidSelection, setPaidSelection] = useState<PaidSelection>({});
+  const [settings, setSettings] = useLocalStorage({
+    key: 'short-studio-local-settings',
+    defaultValue: localSettings.parse({}),
+  });
+  const [topic, setTopic] = useState('');
   const [script, setScript] = useState('');
   const {job, setJob, running, pollError} = useStudioJobs();
   const [outputs, setOutputs] = useState<{id: string; startedAt: number; phase: string; bytes: number}[]>([]);
@@ -236,6 +245,22 @@ function Studio() {
       const {id} = await (
         await api('export', {method: 'POST', headers: {'X-Short-Studio': '1'}, body: form})
       ).json();
+      setJob({id, phase: 'Preparing scenes', progress: 0});
+    } catch (issue) {
+      setJob({phase: 'Failed', progress: 0, error: issue instanceof Error ? issue.message : String(issue)});
+    }
+  }
+
+  async function startLocal() {
+    setJob({phase: 'Preparing scenes', progress: 0});
+    setDialog('export');
+    try {
+      const response = await api('local', {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({topic, ...settings}),
+      });
+      const {id} = await response.json();
       setJob({id, phase: 'Preparing scenes', progress: 0});
     } catch (issue) {
       setJob({phase: 'Failed', progress: 0, error: issue instanceof Error ? issue.message : String(issue)});
@@ -428,6 +453,9 @@ function Studio() {
               >
                 Open project folder
               </Menu.Item>
+              <Menu.Item disabled={running || !!voiceScene} onClick={() => setDialog('local')}>
+                Generate locally from topic
+              </Menu.Item>
               <Menu.Item
                 disabled={running || !!voiceScene}
                 leftSection={<Sparkles size={15} />}
@@ -436,7 +464,7 @@ function Studio() {
                   setDialog('paid');
                 }}
               >
-                Generate from topic
+                Generate from topic (paid)
               </Menu.Item>
               <Menu.Item onClick={() => void refreshOutputs().catch((issue) => setError(String(issue)))}>
                 Generation history{' '}
@@ -799,6 +827,47 @@ function Studio() {
             </Button>
           </>
         )}
+      </Modal>
+      <Modal
+        opened={dialog === 'local'}
+        onClose={() => setDialog(undefined)}
+        title="Generate locally from topic"
+        centered
+      >
+        <Textarea
+          label="Topic"
+          value={topic}
+          maxLength={500}
+          placeholder="How do fireflies glow?"
+          onChange={(event) => setTopic(event.currentTarget.value)}
+        />
+        <NativeSelect
+          label="Scenes"
+          data={['1', '2', '3', '4', '5', '6']}
+          value={settings.scenes}
+          onChange={(event) => setSettings({...settings, scenes: Number(event.currentTarget.value)})}
+        />
+        <NativeSelect
+          label="Narrator"
+          data={Object.entries(kokoroVoices).map(([value, label]) => ({value, label}))}
+          value={settings.voice}
+          onChange={(event) =>
+            setSettings({...settings, voice: event.currentTarget.value as typeof settings.voice})
+          }
+        />
+        <TextInput
+          label="Illustration style"
+          maxLength={150}
+          value={settings.style}
+          onChange={(event) => setSettings({...settings, style: event.currentTarget.value})}
+        />
+        <Button
+          className="primary"
+          disabled={!topic.trim() || !settings.style.trim() || running}
+          onClick={startLocal}
+        >
+          Generate MP4
+        </Button>
       </Modal>
       <Modal
         opened={dialog === 'script'}

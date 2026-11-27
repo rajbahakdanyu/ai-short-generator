@@ -3,6 +3,7 @@ import {join, resolve} from 'node:path';
 import {parseArgs} from 'node:util';
 import {demoProject} from './demo.ts';
 import {parseKokoroVoice} from './kokoro-voices.ts';
+import {buildLocalTopic} from './local-topic.ts';
 import {run, toWav} from './media.ts';
 import {buildPaidShort} from './paid.ts';
 import {FPS, projectSchema} from './project.ts';
@@ -11,6 +12,7 @@ import {renderShort} from './render.ts';
 import {buildStoryboard, readStoryboard} from './storyboard.ts';
 
 const usage = `Usage
+  pnpm generate --local-topic "Your topic" [--scenes 1-6] [--style "Watercolour"] [--kokoro-voice ID] [--prepare-only]
   pnpm generate --storyboard path/to/storyboard.json [--music path/to/track.mp3] [--prepare-only]
   pnpm generate --paid-topic "Your topic" [--music path/to/track.mp3] [--prepare-only]
   pnpm generate --paid-topic "Your topic" --plan-only
@@ -24,8 +26,11 @@ const usage = `Usage
 async function main() {
   const {values} = parseArgs({
     options: {
+      scenes: {type: 'string'},
+      style: {type: 'string'},
       demo: {type: 'boolean'},
       storyboard: {type: 'string'},
+      'local-topic': {type: 'string'},
       'paid-topic': {type: 'string'},
       'resume-paid': {type: 'string'},
       'plan-only': {type: 'boolean'},
@@ -42,11 +47,13 @@ async function main() {
     return;
   }
   const topic = values['paid-topic']?.trim();
+  const local = values['local-topic']?.trim();
   const resume = values['resume-paid'] && resolve(values['resume-paid']);
   const planOnly = values['plan-only'] ?? false;
-  const modes = [values.storyboard, values.demo, values.render, topic, resume].filter(Boolean);
+  const modes = [values.storyboard, values.demo, values.render, topic, local, resume].filter(Boolean);
   if (
     modes.length !== 1 ||
+    (!local && (values.scenes !== undefined || values.style !== undefined)) ||
     (planOnly && !topic) ||
     (values['prepare-only'] && (planOnly || values.render)) ||
     ((values.render || planOnly || resume) && values.music !== undefined)
@@ -76,7 +83,7 @@ async function main() {
     await run('ffmpeg', ['-version']);
   }
 
-  const slug = (board?.title ?? topic)
+  const slug = (board?.title ?? topic ?? local)
     ?.toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
@@ -102,15 +109,21 @@ async function main() {
     music = 'music.wav';
     await toWav(resolve(values.music), join(assets, music));
   }
-  const result = provider
-    ? await buildPaidShort(provider, topic ?? '', directory, {
-        async report(detail) {
-          console.log(detail);
-        },
+  const result = local
+    ? await buildLocalTopic(local, directory, console.log, undefined, {
+        voice,
+        scenes: values.scenes === undefined ? undefined : Number(values.scenes),
+        style: values.style,
       })
-    : board
-      ? await buildStoryboard(board, directory)
-      : await demoProject(assets, music);
+    : provider
+      ? await buildPaidShort(provider, topic ?? '', directory, {
+          async report(detail) {
+            console.log(detail);
+          },
+        })
+      : board
+        ? await buildStoryboard(board, directory)
+        : await demoProject(assets, music);
   if (typeof result === 'string') {
     console.log(`Storyboard saved to ${result}`);
     return;

@@ -3,7 +3,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 mkdir -p .kokoro
-python3 -m venv .kokoro/venv
+if [[ ! -x .kokoro/venv/bin/python ]]; then
+  python3.12 -m venv .kokoro/venv
+fi
 .kokoro/venv/bin/python -m pip install 'kokoro-onnx==0.6.1' 'soundfile==0.14.0'
 
 release=https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1

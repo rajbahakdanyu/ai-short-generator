@@ -8,6 +8,8 @@ import {pipeline} from 'node:stream/promises';
 import type {Plugin} from 'vite';
 import {z} from 'zod';
 import {readOptional, writeJson} from '../src/checkpoint.ts';
+import {localSettings} from '../src/local-settings.ts';
+import {buildLocalTopic, localTopic} from '../src/local-topic.ts';
 import {run, toWav} from '../src/media.ts';
 import {buildPaidShort, paidBoardSchema} from '../src/paid.ts';
 import {
@@ -299,7 +301,9 @@ export function studioApi(): Plugin {
       .catch((error: unknown) => {
         job.phase = controller.signal.aborted ? 'Cancelled' : 'Failed';
         job.error = controller.signal.aborted
-          ? 'Generation stopped. Provider calls already submitted may still be charged.'
+          ? job.paid
+            ? 'Generation stopped. Provider calls already submitted may still be charged.'
+            : 'Generation stopped.'
           : error instanceof Error
             ? error.message
             : String(error);
@@ -415,11 +419,35 @@ export function studioApi(): Plugin {
             if (directory) await rm(directory, {recursive: true, force: true});
           }
         }
-        if (path === '/api/studio/export' || path === '/api/studio/paid') {
+        if (path === '/api/studio/export' || path === '/api/studio/paid' || path === '/api/studio/local') {
           if (rendering || narrating) return json(res, 409, {error: 'Another generation is running.'});
           rendering = true;
           let upload: Upload | undefined;
           try {
+            if (path.endsWith('/local')) {
+              const {topic, ...settings} = localSettings
+                .extend({topic: localTopic})
+                .parse(await readJson(req));
+              const id = randomUUID();
+              const job = await createJob(id);
+              const directory = jobDirectory(id);
+              return json(res, 202, {
+                id: startJob(id, job, async (signal) => {
+                  const project = await buildLocalTopic(
+                    topic,
+                    directory,
+                    (detail) => {
+                      job.detail = detail;
+                    },
+                    signal,
+                    settings,
+                  );
+                  await writeJson(join(directory, 'project.json'), projectSchema.parse(project));
+                  job.draft = 'project.json';
+                  await renderJob(job, id, signal);
+                }),
+              });
+            }
             if (path.endsWith('/paid')) {
               if (req.headers['content-type']?.startsWith('multipart/form-data;'))
                 upload = await parseUpload(req);
