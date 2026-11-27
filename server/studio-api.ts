@@ -9,7 +9,8 @@ import type {Plugin} from 'vite';
 import {z} from 'zod';
 import {readOptional, writeJson} from '../src/checkpoint.ts';
 import {localSettings} from '../src/local-settings.ts';
-import {buildLocalTopic, localTopic} from '../src/local-topic.ts';
+import {type LocalStoryboard, localStoryboardSchema} from '../src/local-storyboard.ts';
+import {buildLocalTopic, localTopic, planLocalTopic, prepareLocalStoryboard} from '../src/local-topic.ts';
 import {run, toWav} from '../src/media.ts';
 import {buildPaidShort, paidBoardSchema} from '../src/paid.ts';
 import {
@@ -92,6 +93,12 @@ const paidRequest = z.object({
     })
     .optional(),
 });
+const localGenerationRequest = localSettings.extend({topic: localTopic, mode: z.enum(['direct', 'plan'])});
+const localPrepareRequest = z.object({
+  mode: z.literal('prepare'),
+  planId: z.string().regex(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/),
+  board: z.unknown(),
+});
 
 function json(res: ServerResponse, status: number, value: unknown) {
   res.writeHead(status, {'Content-Type': 'application/json', 'Cache-Control': 'no-store'});
@@ -152,6 +159,27 @@ async function renderJob(job: Job, id: string, signal?: AbortSignal) {
     },
     signal,
   );
+}
+
+async function prepareLocalJob(
+  board: LocalStoryboard,
+  settings: z.input<typeof localSettings>,
+  job: Job,
+  id: string,
+  signal: AbortSignal,
+) {
+  const project = await prepareLocalStoryboard(
+    board,
+    jobDirectory(id),
+    (detail) => {
+      job.detail = detail;
+    },
+    signal,
+    settings,
+  );
+  await writeJson(join(jobDirectory(id), 'project.json'), projectSchema.parse(project));
+  job.draft = 'project.json';
+  await renderJob(job, id, signal);
 }
 
 async function prepareMusic(
@@ -363,6 +391,18 @@ export function studioApi(): Plugin {
             const job = await readJob(id);
             if (!job?.draft || !['Failed', 'Cancelled'].includes(job.phase))
               throw new Error('This job has no resumable project.');
+            if (job.local?.mode === 'prepare' && job.draft === 'local-storyboard.json') {
+              const settings = job.local.settings;
+              const saved = JSON.parse(await readFile(join(jobDirectory(id), job.draft), 'utf8')) as unknown;
+              const board = localStoryboardSchema(settings).parse(saved) as LocalStoryboard;
+              job.error = undefined;
+              job.startedAt = Date.now();
+              job.phase = 'Preparing scenes';
+              await saveJob(id, job);
+              return json(res, 202, {
+                id: startJob(id, job, (signal) => prepareLocalJob(board, settings, job, id, signal)),
+              });
+            }
             if (!job.paid && job.draft === 'project.json') {
               job.error = undefined;
               job.startedAt = Date.now();
@@ -425,14 +465,61 @@ export function studioApi(): Plugin {
           let upload: Upload | undefined;
           try {
             if (path.endsWith('/local')) {
-              const {topic, ...settings} = localSettings
-                .extend({topic: localTopic})
-                .parse(await readJson(req));
+              const decoded = await readJson(req);
+              const mode = z.object({mode: z.enum(['direct', 'plan', 'prepare'])}).parse(decoded).mode;
+              if (mode === 'prepare') {
+                const input = localPrepareRequest.parse(decoded);
+                const job = await readJob(input.planId);
+                if (
+                  !job ||
+                  !['Complete', 'Failed', 'Cancelled'].includes(job.phase) ||
+                  !job.local ||
+                  !['plan', 'prepare'].includes(job.local.mode) ||
+                  job.draft !== 'local-storyboard.json'
+                )
+                  throw new Error('Review a completed local storyboard before preparing scenes.');
+                const settings = localSettings.parse(job.local.settings);
+                const board = localStoryboardSchema(settings).parse(input.board) as LocalStoryboard;
+                job.local = {mode: 'prepare', settings};
+                job.phase = 'Preparing scenes';
+                job.progress = 0;
+                job.startedAt = Date.now();
+                job.error = undefined;
+                job.detail = 'Preparing approved storyboard';
+                await writeJson(join(jobDirectory(input.planId), 'local-storyboard.json'), {
+                  ...board,
+                  settings,
+                });
+                await saveJob(input.planId, job);
+                return json(res, 202, {
+                  id: startJob(input.planId, job, (signal) =>
+                    prepareLocalJob(board, settings, job, input.planId, signal),
+                  ),
+                });
+              }
+              const input = localGenerationRequest.parse(decoded);
+              const {topic, mode: generationMode, ...settings} = input;
               const id = randomUUID();
               const job = await createJob(id);
+              job.local = {mode: generationMode, settings};
+              await saveJob(id, job);
               const directory = jobDirectory(id);
               return json(res, 202, {
                 id: startJob(id, job, async (signal) => {
+                  if (generationMode === 'plan') {
+                    const board = await planLocalTopic(
+                      topic,
+                      (detail) => {
+                        job.detail = detail;
+                      },
+                      signal,
+                      settings,
+                    );
+                    await writeJson(join(directory, 'local-storyboard.json'), {...board, settings});
+                    job.draft = 'local-storyboard.json';
+                    await saveJob(id, job);
+                    return;
+                  }
                   const project = await buildLocalTopic(
                     topic,
                     directory,
@@ -531,6 +618,8 @@ export function studioApi(): Plugin {
             resumeNeedsProviders: !!job.paid,
             hasVideo: !!job.file,
             hasDraft: !!job.draft,
+            hasStoryboard: job.draft === 'local-storyboard.json',
+            localMode: job.local?.mode,
           });
         }
         if (job.phase === 'Complete' && resource === 'video' && job.file)
@@ -538,6 +627,15 @@ export function studioApi(): Plugin {
         if (resource === 'draft' && job.draft) {
           const manifest = JSON.parse(await readFile(join(jobDirectory(id), job.draft), 'utf8')) as unknown;
           if (job.draft === 'project.json') return json(res, 200, {kind: 'project', manifest});
+          if (job.draft === 'local-storyboard.json' && job.local) {
+            return json(res, 200, {
+              kind: 'local-storyboard',
+              manifest: {
+                ...localStoryboardSchema(job.local.settings).parse(manifest),
+                settings: job.local.settings,
+              },
+            });
+          }
           const board = paidBoardSchema.parse(manifest);
           const scenes = await Promise.all(
             board.scenes.map(async (scene, index) => {

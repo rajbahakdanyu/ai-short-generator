@@ -917,6 +917,30 @@ main {
 .generation-fields > button {
   justify-self: end;
 }
+.generation-actions,
+.diagram-labels {
+  display: grid;
+  gap: 10px;
+}
+.generation-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-block: 8px;
+  border-top: 1px solid var(--line);
+  background: var(--mantine-color-body);
+}
+.local-generation-modal-content {
+  max-height: calc(100dvh - 32px);
+}
+.local-generation-modal-body {
+  max-height: calc(100dvh - 180px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.storyboard-review-scene {
+  gap: 12px;
+}
 .generation-pair {
   display: grid;
   grid-template-columns: minmax(90px, 1fr) minmax(0, 2fr);

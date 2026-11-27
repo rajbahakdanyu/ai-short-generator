@@ -17,6 +17,8 @@ export const localSettings = z.object({
   imagePreset: z.enum(['turbo', 'standard', 'sdxl']).default('turbo'),
   format: z.enum(['illustrated', 'animated']).default('illustrated'),
   scenes: z.number().int().min(1).max(6).default(3),
+  targetDurationSeconds: z.number().int().min(15).max(180).default(45),
+  audience: z.enum(['general', 'beginner', 'intermediate']).default('general'),
   voice: kokoroVoiceSchema.default(defaultKokoroVoice),
   style: z.string().trim().min(1).max(150).default('Editorial science illustration'),
 });

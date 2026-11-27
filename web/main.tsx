@@ -43,6 +43,7 @@ import {lazy, Suspense, useEffect, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {defaultKokoroVoice, kokoroVoices} from '../src/kokoro-voices.ts';
 import {localModelDefaults, localSettings} from '../src/local-settings.ts';
+import type {LocalStoryboard} from '../src/local-storyboard.ts';
 import {captionIssue, maxCaptions, maxProjectFrames, maxSceneFrames, maxScenes} from '../src/project.ts';
 import type {PaidSelection} from '../src/providers/catalog.ts';
 import {deleteSnapshot, listSnapshots, type Snapshot, saveSnapshot, useDraft} from './draft-state.ts';
@@ -71,6 +72,7 @@ const theme = createTheme({
   defaultRadius: 'md',
   respectReducedMotion: true,
 });
+const diagramLabelKeys = ['first', 'second', 'third'] as const;
 
 function Studio() {
   const {draft, setDraft, hydrated, saveError, canUndo, canRedo, undo, redo} = useDraft();
@@ -80,7 +82,16 @@ function Studio() {
   const [error, setError] = useState('');
   const [voiceScene, setVoiceScene] = useState<string>();
   const [dialog, setDialog] = useState<
-    'local' | 'script' | 'new' | 'sample' | 'export' | 'paid' | 'import' | 'library' | 'outputs'
+    | 'local'
+    | 'local-review'
+    | 'script'
+    | 'new'
+    | 'sample'
+    | 'export'
+    | 'paid'
+    | 'import'
+    | 'library'
+    | 'outputs'
   >();
   const [paidSelection, setPaidSelection] = useState<PaidSelection>({});
   const [guideDismissed, setGuideDismissed] = useLocalStorage({
@@ -114,6 +125,14 @@ function Studio() {
   const [topic, setTopic] = useState('');
   const [factCheckAccepted, setFactCheckAccepted] = useState(false);
   const [script, setScript] = useState('');
+  const [localReview, setLocalReview] = useState<{
+    id: string;
+    board: LocalStoryboard;
+    sceneIds: string[];
+    format: 'illustrated' | 'animated';
+    targetDurationSeconds: number;
+    audience: 'general' | 'beginner' | 'intermediate';
+  }>();
   const {job, setJob, running, pollError} = useStudioJobs();
   const [outputs, setOutputs] = useState<{id: string; startedAt: number; phase: string; bytes: number}[]>([]);
   const [resumeId, setResumeId] = useState<string>();
@@ -278,19 +297,86 @@ function Studio() {
     }
   }
 
-  async function startLocal() {
+  async function startLocal(review: boolean) {
     setJob({phase: 'Preparing scenes', progress: 0});
     setDialog('export');
     try {
       const response = await api('local', {
         method: 'POST',
         headers: jsonHeaders,
-        body: JSON.stringify({topic, ...settings, style: settings.style.trim() || undefined}),
+        body: JSON.stringify({
+          mode: review ? 'plan' : 'direct',
+          topic,
+          ...settings,
+          style: settings.style.trim() || undefined,
+        }),
       });
       const {id} = await response.json();
       setJob({id, phase: 'Preparing scenes', progress: 0});
     } catch (issue) {
       setJob({phase: 'Failed', progress: 0, error: issue instanceof Error ? issue.message : String(issue)});
+    }
+  }
+
+  async function openLocalReview(id: string) {
+    if (localReview?.id === id) {
+      setDialog('local-review');
+      return;
+    }
+    try {
+      const {manifest} = await (await api(`jobs/${id}/draft`)).json();
+      setLocalReview({
+        id,
+        board: {title: manifest.title, scenes: manifest.scenes},
+        sceneIds: manifest.scenes.map(() => crypto.randomUUID()),
+        format: manifest.settings.format,
+        targetDurationSeconds: manifest.settings.targetDurationSeconds,
+        audience: manifest.settings.audience,
+      });
+      setDialog('local-review');
+    } catch (issue) {
+      setError(issue instanceof Error ? issue.message : String(issue));
+    }
+  }
+
+  function patchLocalScene(
+    index: number,
+    patch: (scene: LocalStoryboard['scenes'][number]) => LocalStoryboard['scenes'][number],
+  ) {
+    setLocalReview((current) =>
+      current
+        ? {
+            ...current,
+            board: {
+              ...current.board,
+              scenes: current.board.scenes.map((scene, sceneIndex) =>
+                sceneIndex === index ? patch(scene) : scene,
+              ),
+            },
+          }
+        : current,
+    );
+  }
+
+  async function prepareLocalReview() {
+    if (!localReview || running) return;
+    setDialog('export');
+    try {
+      await api('local', {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({mode: 'prepare', planId: localReview.id, board: localReview.board}),
+      });
+      setJob({id: localReview.id, phase: 'Preparing scenes', progress: 0});
+      setLocalReview(undefined);
+    } catch (issue) {
+      setJob({
+        id: localReview.id,
+        phase: 'Failed',
+        progress: 0,
+        hasStoryboard: true,
+        error: issue instanceof Error ? issue.message : String(issue),
+      });
     }
   }
 
@@ -910,6 +996,7 @@ function Studio() {
       <Modal
         opened={dialog === 'local'}
         closeButtonProps={{'aria-label': 'Close dialog'}}
+        classNames={{body: 'local-generation-modal-body', content: 'local-generation-modal-content'}}
         onClose={() => setDialog(undefined)}
         title="Local generation"
         size="lg"
@@ -921,7 +1008,7 @@ function Studio() {
             <Tabs.Tab value="models">Local models</Tabs.Tab>
           </Tabs.List>
           <Tabs.Panel value="short">
-            <div className="generation-fields">
+            <div className="diagram-labels">
               <NativeSelect
                 label="Video format"
                 data={[
@@ -947,12 +1034,41 @@ function Studio() {
                   value={settings.scenes}
                   onChange={(event) => setSettings({...settings, scenes: Number(event.currentTarget.value)})}
                 />
+                <NumberInput
+                  label="Target duration (seconds)"
+                  min={15}
+                  max={180}
+                  value={settings.targetDurationSeconds ?? 45}
+                  onChange={(value) =>
+                    setSettings({
+                      ...settings,
+                      targetDurationSeconds: typeof value === 'number' ? value : 45,
+                    })
+                  }
+                />
+              </div>
+              <div className="generation-pair">
                 <NativeSelect
                   label="Narrator"
                   data={Object.entries(kokoroVoices).map(([value, label]) => ({value, label}))}
                   value={settings.voice}
                   onChange={(event) =>
                     setSettings({...settings, voice: event.currentTarget.value as typeof settings.voice})
+                  }
+                />
+                <NativeSelect
+                  label="Audience"
+                  data={[
+                    {value: 'general', label: 'General audience'},
+                    {value: 'beginner', label: 'Beginner'},
+                    {value: 'intermediate', label: 'Intermediate'},
+                  ]}
+                  value={settings.audience ?? 'general'}
+                  onChange={(event) =>
+                    setSettings({
+                      ...settings,
+                      audience: event.currentTarget.value as typeof settings.audience,
+                    })
                   }
                 />
               </div>
@@ -970,19 +1086,34 @@ function Studio() {
                 checked={factCheckAccepted}
                 onChange={(event) => setFactCheckAccepted(event.currentTarget.checked)}
               />
-              <Button
-                className="primary"
-                disabled={
-                  !topic.trim() ||
-                  !factCheckAccepted ||
-                  (settings.format !== 'animated' && !settings.style.trim()) ||
-                  running ||
-                  !!voiceScene
-                }
-                onClick={startLocal}
-              >
-                Generate MP4
-              </Button>
+              <div className="generation-actions">
+                <Button
+                  className="primary"
+                  disabled={
+                    !topic.trim() ||
+                    !factCheckAccepted ||
+                    (settings.format !== 'animated' && !settings.style.trim()) ||
+                    running ||
+                    !!voiceScene
+                  }
+                  onClick={() => void startLocal(true)}
+                >
+                  Create storyboard to review
+                </Button>
+                <Button
+                  variant="default"
+                  disabled={
+                    !topic.trim() ||
+                    !factCheckAccepted ||
+                    (settings.format !== 'animated' && !settings.style.trim()) ||
+                    running ||
+                    !!voiceScene
+                  }
+                  onClick={() => void startLocal(false)}
+                >
+                  Skip review and generate MP4
+                </Button>
+              </div>
             </div>
           </Tabs.Panel>
           <Tabs.Panel value="models">
@@ -1059,6 +1190,136 @@ function Studio() {
         </Button>
       </Modal>
       <Modal
+        opened={dialog === 'local-review'}
+        closeButtonProps={{'aria-label': 'Close dialog'}}
+        onClose={() => setDialog('export')}
+        title="Review local storyboard"
+        size="lg"
+        centered
+      >
+        {localReview && (
+          <div className="generation-fields">
+            <p className="modal-note">
+              Target: about {localReview.targetDurationSeconds} seconds · Audience:{' '}
+              {localReview.audience === 'general' ? 'general audience' : localReview.audience}. Edit the
+              script and visuals before local media generation starts.
+            </p>
+            <TextInput
+              label="Short title"
+              maxLength={200}
+              value={localReview.board.title}
+              onChange={(event) =>
+                setLocalReview({
+                  ...localReview,
+                  board: {...localReview.board, title: event.currentTarget.value},
+                })
+              }
+            />
+            {localReview.board.scenes.map((item, index) => (
+              <fieldset className="storyboard-review-scene" key={localReview.sceneIds[index]}>
+                <legend>Scene {index + 1}</legend>
+                <Textarea
+                  label="Narration"
+                  maxLength={4000}
+                  minRows={3}
+                  value={item.narration}
+                  onChange={(event) => {
+                    const narration = event.currentTarget.value;
+                    patchLocalScene(index, (scene) => ({
+                      ...scene,
+                      narration,
+                    }));
+                  }}
+                />
+                {localReview.format === 'animated' && 'diagram' in item ? (
+                  <>
+                    <TextInput
+                      label="Diagram heading"
+                      maxLength={48}
+                      value={item.diagram.heading}
+                      onChange={(event) => {
+                        const heading = event.currentTarget.value;
+                        patchLocalScene(index, (scene) =>
+                          'diagram' in scene ? {...scene, diagram: {...scene.diagram, heading}} : scene,
+                        );
+                      }}
+                    />
+                    <NativeSelect
+                      label="Diagram layout"
+                      data={[
+                        {value: 'pipeline', label: 'Pipeline'},
+                        {value: 'fan-out', label: 'Fan-out'},
+                        {value: 'fan-in', label: 'Fan-in'},
+                      ]}
+                      value={item.diagram.layout}
+                      onChange={(event) => {
+                        const layout = event.currentTarget.value;
+                        if (layout === 'pipeline' || layout === 'fan-out' || layout === 'fan-in')
+                          patchLocalScene(index, (scene) =>
+                            'diagram' in scene ? {...scene, diagram: {...scene.diagram, layout}} : scene,
+                          );
+                      }}
+                    />
+                    <div className="generation-fields">
+                      {diagramLabelKeys.map((labelKey, labelIndex) => (
+                        <TextInput
+                          key={`${localReview.sceneIds[index]}-${labelKey}`}
+                          label={`Diagram object ${labelIndex + 1}`}
+                          maxLength={22}
+                          value={item.diagram.labels[labelIndex]}
+                          onChange={(event) => {
+                            const value = event.currentTarget.value;
+                            patchLocalScene(index, (scene) =>
+                              'diagram' in scene
+                                ? {
+                                    ...scene,
+                                    diagram: {
+                                      ...scene.diagram,
+                                      labels: scene.diagram.labels.map((current, currentIndex) =>
+                                        currentIndex === labelIndex ? value : current,
+                                      ),
+                                    },
+                                  }
+                                : scene,
+                            );
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <Textarea
+                    label="Visual prompt"
+                    maxLength={4000}
+                    minRows={2}
+                    value={'imagePrompt' in item ? item.imagePrompt : ''}
+                    onChange={(event) => {
+                      const imagePrompt = event.currentTarget.value;
+                      patchLocalScene(index, (scene) =>
+                        'imagePrompt' in scene ? {...scene, imagePrompt} : scene,
+                      );
+                    }}
+                  />
+                )}
+                <Textarea
+                  label="Sources and verification notes"
+                  maxLength={4000}
+                  minRows={2}
+                  value={item.sources ?? ''}
+                  onChange={(event) => {
+                    const sources = event.currentTarget.value;
+                    patchLocalScene(index, (scene) => ({...scene, sources}));
+                  }}
+                />
+              </fieldset>
+            ))}
+            <Button className="primary" onClick={() => void prepareLocalReview()}>
+              Generate visuals, narration, and MP4
+            </Button>
+          </div>
+        )}
+      </Modal>
+      <Modal
         opened={dialog === 'export'}
         closeButtonProps={{'aria-label': 'Close dialog'}}
         onClose={() => setDialog(undefined)}
@@ -1123,7 +1384,18 @@ function Studio() {
               {job.error}
             </Alert>
           )}
-          {!running && job?.id && job.hasDraft && (
+          {!running && job?.id && job.hasStoryboard && (
+            <Button
+              variant="default"
+              onClick={() => {
+                const id = job?.id;
+                if (id) void openLocalReview(id);
+              }}
+            >
+              Review and edit storyboard
+            </Button>
+          )}
+          {!running && job?.id && job.hasDraft && !job.hasStoryboard && (
             <Button
               variant="default"
               loading={opening}

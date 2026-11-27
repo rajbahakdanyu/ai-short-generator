@@ -23,7 +23,7 @@ pnpm setup:local
 pnpm studio
 ```
 
-**3. Generate a video.** Click **Start with a topic** in the welcome panel, or choose **Generate → Local generation**. Try “How do fireflies glow?” Keep the default settings, confirm that you will fact-check the narration, and click **Generate MP4**. Local models can state incorrect facts, and Studio does not verify claims, so review the script before you publish. When the render finishes, click **Download MP4**. You can find the result again under **Generate → Generation history**.
+**3. Generate a video.** Click **Start with a topic** in the welcome panel, or choose **Generate → Local generation**. Try “How do fireflies glow?” Choose a target duration and audience, confirm that you will fact-check the narration, then click **Create storyboard to review**. Edit the script, visual prompts, or diagram details before generating media. To keep the previous one-step workflow, choose **Skip review and generate MP4** instead. Local models can state incorrect facts, and Studio does not verify claims, so review the script before you publish. When the render finishes, click **Download MP4**. You can find the result again under **Generate → Generation history**.
 
 **Want to explore first?** The editor opens with a narrated black-hole sample. Click Play in the preview to watch it, select a scene to edit it, or click **Export MP4** to render the current draft. To try just the editor and sample before downloading models, install Node.js, pnpm and FFmpeg, then run `pnpm install --frozen-lockfile` and `pnpm studio`. The first export may download the rendering browser.
 

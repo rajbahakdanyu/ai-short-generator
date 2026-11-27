@@ -1,6 +1,8 @@
 import {mkdir, readdir, rm, stat} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
+import type {z} from 'zod';
 import {readOptional, writeJson} from '../src/checkpoint.ts';
+import type {localSettings} from '../src/local-settings.ts';
 
 export const jobDirectory = (id: string) => resolve('output', `studio-${id}`);
 export const idPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
@@ -17,13 +19,14 @@ export type Job = {
   phase: 'Preparing scenes' | 'Rendering video' | 'Complete' | 'Failed' | 'Cancelled';
   progress: number;
   file?: string;
-  draft?: 'project.json' | 'storyboard.json';
+  draft?: 'project.json' | 'storyboard.json' | 'local-storyboard.json';
   error?: string;
   detail?: string;
   startedAt: number;
   usage?: Usage;
   estimate?: Estimate;
   paid?: {mode: 'plan' | 'prepare' | 'export'; video: boolean; fingerprint: string};
+  local?: {mode: 'direct' | 'plan' | 'prepare'; settings: z.infer<typeof localSettings>};
 };
 
 const writes = new Map<string, Promise<void>>();
@@ -56,6 +59,8 @@ export async function readJob(id: string): Promise<Job | undefined> {
     let draft = job.draft;
     if (!draft && (await has('project.json'))) draft = 'project.json';
     if (!draft && job.paid && (await has('storyboard.json'))) draft = 'storyboard.json';
+    if (!draft && job.local?.mode !== 'direct' && job.local && (await has('local-storyboard.json')))
+      draft = 'local-storyboard.json';
     return {
       ...job,
       draft,

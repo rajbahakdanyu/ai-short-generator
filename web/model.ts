@@ -25,6 +25,8 @@ export type Job = {
   id?: string;
   hasDraft?: boolean;
   hasVideo?: boolean;
+  hasStoryboard?: boolean;
+  localMode?: 'direct' | 'plan' | 'prepare';
   detail?: string;
   startedAt?: number;
   resumable?: boolean;
