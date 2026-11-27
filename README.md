@@ -27,6 +27,16 @@ pnpm studio
 
 **Want to explore first?** The editor opens with a narrated black-hole sample. Click Play in the preview to watch it, select a scene to edit it, or click **Export MP4** to render the current draft. To try just the editor and sample before downloading models, install Node.js, pnpm and FFmpeg, then run `pnpm install --frozen-lockfile` and `pnpm studio`. The first export may download the rendering browser.
 
+### Make an animated developer explainer
+
+Choose **Generate → Local generation → Video format → Animated explainer**. Enter a prompt such as “Explain how a request travels from a browser through a load balancer to a server” and click **Generate MP4**. The local writer plans the narration, diagram labels and connections. Moving shapes show sequences, branching or merging while Kokoro narrates. Each scene is saved as a video clip, so you can reopen the prepared project in Studio.
+
+From the terminal:
+
+```sh
+pnpm generate --local-topic "Explain how a load balancer routes requests" --format animated
+```
+
 ## Where to go next
 
 - [Edit scenes, captions and audio](#edit-a-short-in-studio)

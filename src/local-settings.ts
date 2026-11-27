@@ -15,6 +15,7 @@ export const localSettings = z.object({
   voiceModel: modelPath.default(localModelDefaults.voiceModel),
   voiceBank: modelPath.default(localModelDefaults.voiceBank),
   imagePreset: z.enum(['turbo', 'standard', 'sdxl']).default('turbo'),
+  format: z.enum(['illustrated', 'animated']).default('illustrated'),
   scenes: z.number().int().min(1).max(6).default(3),
   voice: kokoroVoiceSchema.default(defaultKokoroVoice),
   style: z.string().trim().min(1).max(150).default('Editorial science illustration'),

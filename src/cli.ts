@@ -13,7 +13,7 @@ import {renderShort} from './render.ts';
 import {buildStoryboard, readStoryboard} from './storyboard.ts';
 
 const usage = `Usage
-  pnpm generate --local-topic "Your topic" [--scenes 1-6] [--style "Watercolour"] [--kokoro-voice ID] [--script-model FILE] [--image-model DIR] [--image-preset turbo|standard|sdxl] [--voice-model FILE] [--voice-bank FILE] [--prepare-only]
+  pnpm generate --local-topic "Your topic" [--format illustrated|animated] [--scenes 1-6] [--style "Watercolour"] [--kokoro-voice ID] [--script-model FILE] [--image-model DIR] [--image-preset turbo|standard|sdxl] [--voice-model FILE] [--voice-bank FILE] [--prepare-only]
   pnpm generate --storyboard path/to/storyboard.json [--music path/to/track.mp3] [--prepare-only]
   pnpm generate --paid-topic "Your topic" [--music path/to/track.mp3] [--prepare-only]
   pnpm generate --paid-topic "Your topic" --plan-only
@@ -33,6 +33,7 @@ async function main() {
       'voice-model': {type: 'string'},
       'voice-bank': {type: 'string'},
       'image-preset': {type: 'string'},
+      format: {type: 'string'},
       style: {type: 'string'},
       demo: {type: 'boolean'},
       storyboard: {type: 'string'},
@@ -62,6 +63,7 @@ async function main() {
     (!local &&
       (values.scenes !== undefined ||
         values.style !== undefined ||
+        values.format !== undefined ||
         values['script-model'] !== undefined ||
         values['image-model'] !== undefined ||
         values['voice-model'] !== undefined ||
@@ -127,6 +129,7 @@ async function main() {
         voice,
         scenes: values.scenes === undefined ? undefined : Number(values.scenes),
         style: values.style,
+        format: localSettings.shape.format.parse(values.format),
         scriptModel: values['script-model'],
         imageModel: values['image-model'],
         voiceModel: values['voice-model'],

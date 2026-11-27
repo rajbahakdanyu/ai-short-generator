@@ -6,9 +6,17 @@ import {join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {bundle} from '@remotion/bundler';
 import {makeCancelSignal, renderMedia, selectComposition} from '@remotion/renderer';
+import type {Diagram} from './diagram.tsx';
 import {projectSchema} from './project.ts';
 
-const compositionSources = ['video.tsx', 'composition.tsx', 'project.ts', 'timing.ts', 'kokoro-voices.ts'];
+const compositionSources = [
+  'diagram.tsx',
+  'video.tsx',
+  'composition.tsx',
+  'project.ts',
+  'timing.ts',
+  'kokoro-voices.ts',
+];
 let template: {signature: string; bundle: Promise<string>} | undefined;
 
 async function projectBundle(assets: string) {
@@ -96,5 +104,31 @@ export async function renderShort(
   } finally {
     signal?.removeEventListener('abort', cancel);
     await Promise.all([rm(temporaryOutput, {force: true}), rm(serveUrl, {recursive: true, force: true})]);
+  }
+}
+
+export async function renderDiagrams(directory: string, diagrams: Diagram[], signal?: AbortSignal) {
+  const serveUrl = await projectBundle(join(directory, 'assets'));
+  const {cancel, cancelSignal} = makeCancelSignal();
+  signal?.addEventListener('abort', cancel, {once: true});
+  try {
+    for (const [index, inputProps] of diagrams.entries()) {
+      signal?.throwIfAborted();
+      const composition = await selectComposition({serveUrl, id: 'DiagramClip', inputProps});
+      signal?.throwIfAborted();
+      await renderMedia({
+        serveUrl,
+        composition,
+        inputProps,
+        cancelSignal,
+        codec: 'h264',
+        muted: true,
+        concurrency: 3,
+        outputLocation: join(directory, `diagram-${index + 1}.mp4`),
+      });
+    }
+  } finally {
+    signal?.removeEventListener('abort', cancel);
+    await rm(serveUrl, {recursive: true, force: true});
   }
 }

@@ -283,7 +283,7 @@ function Studio() {
       const response = await api('local', {
         method: 'POST',
         headers: jsonHeaders,
-        body: JSON.stringify({topic, ...settings}),
+        body: JSON.stringify({topic, ...settings, style: settings.style.trim() || undefined}),
       });
       const {id} = await response.json();
       setJob({id, phase: 'Preparing scenes', progress: 0});
@@ -917,6 +917,17 @@ function Studio() {
           </Tabs.List>
           <Tabs.Panel value="short">
             <div className="generation-fields">
+              <NativeSelect
+                label="Video format"
+                data={[
+                  {value: 'illustrated', label: 'Illustrated Short'},
+                  {value: 'animated', label: 'Animated explainer · moving diagrams'},
+                ]}
+                value={settings.format ?? 'illustrated'}
+                onChange={(event) =>
+                  setSettings({...settings, format: event.currentTarget.value as typeof settings.format})
+                }
+              />
               <Textarea
                 label="Topic"
                 value={topic}
@@ -940,15 +951,22 @@ function Studio() {
                   }
                 />
               </div>
-              <TextInput
-                label="Illustration style"
-                maxLength={150}
-                value={settings.style}
-                onChange={(event) => setSettings({...settings, style: event.currentTarget.value})}
-              />
+              {settings.format !== 'animated' && (
+                <TextInput
+                  label="Illustration style"
+                  maxLength={150}
+                  value={settings.style}
+                  onChange={(event) => setSettings({...settings, style: event.currentTarget.value})}
+                />
+              )}
               <Button
                 className="primary"
-                disabled={!topic.trim() || !settings.style.trim() || running || !!voiceScene}
+                disabled={
+                  !topic.trim() ||
+                  (settings.format !== 'animated' && !settings.style.trim()) ||
+                  running ||
+                  !!voiceScene
+                }
                 onClick={startLocal}
               >
                 Generate MP4
