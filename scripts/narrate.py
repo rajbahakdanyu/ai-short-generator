@@ -9,11 +9,8 @@ from kokoro_onnx import Kokoro
 
 
 def main():
-    storyboard, assets = map(Path, sys.argv[1:])
-    model_dir = Path(__file__).resolve().parent.parent / ".kokoro"
-    model = Kokoro(
-        str(model_dir / "kokoro-v1.0.onnx"), str(model_dir / "voices-v1.0.bin")
-    )
+    storyboard, assets, weights, voices = map(Path, sys.argv[1:])
+    model = Kokoro(str(weights), str(voices))
     scenes = json.loads(storyboard.read_text(encoding="utf-8"))["scenes"]
     for scene in scenes:
         index = scene["index"]

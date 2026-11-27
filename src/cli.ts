@@ -3,6 +3,7 @@ import {join, resolve} from 'node:path';
 import {parseArgs} from 'node:util';
 import {demoProject} from './demo.ts';
 import {parseKokoroVoice} from './kokoro-voices.ts';
+import {localSettings} from './local-settings.ts';
 import {buildLocalTopic} from './local-topic.ts';
 import {run, toWav} from './media.ts';
 import {buildPaidShort} from './paid.ts';
@@ -12,7 +13,7 @@ import {renderShort} from './render.ts';
 import {buildStoryboard, readStoryboard} from './storyboard.ts';
 
 const usage = `Usage
-  pnpm generate --local-topic "Your topic" [--scenes 1-6] [--style "Watercolour"] [--kokoro-voice ID] [--prepare-only]
+  pnpm generate --local-topic "Your topic" [--scenes 1-6] [--style "Watercolour"] [--kokoro-voice ID] [--script-model FILE] [--image-model DIR] [--image-preset turbo|standard|sdxl] [--voice-model FILE] [--voice-bank FILE] [--prepare-only]
   pnpm generate --storyboard path/to/storyboard.json [--music path/to/track.mp3] [--prepare-only]
   pnpm generate --paid-topic "Your topic" [--music path/to/track.mp3] [--prepare-only]
   pnpm generate --paid-topic "Your topic" --plan-only
@@ -27,6 +28,11 @@ async function main() {
   const {values} = parseArgs({
     options: {
       scenes: {type: 'string'},
+      'script-model': {type: 'string'},
+      'image-model': {type: 'string'},
+      'voice-model': {type: 'string'},
+      'voice-bank': {type: 'string'},
+      'image-preset': {type: 'string'},
       style: {type: 'string'},
       demo: {type: 'boolean'},
       storyboard: {type: 'string'},
@@ -53,7 +59,14 @@ async function main() {
   const modes = [values.storyboard, values.demo, values.render, topic, local, resume].filter(Boolean);
   if (
     modes.length !== 1 ||
-    (!local && (values.scenes !== undefined || values.style !== undefined)) ||
+    (!local &&
+      (values.scenes !== undefined ||
+        values.style !== undefined ||
+        values['script-model'] !== undefined ||
+        values['image-model'] !== undefined ||
+        values['voice-model'] !== undefined ||
+        values['voice-bank'] !== undefined ||
+        values['image-preset'] !== undefined)) ||
     (planOnly && !topic) ||
     (values['prepare-only'] && (planOnly || values.render)) ||
     ((values.render || planOnly || resume) && values.music !== undefined)
@@ -114,6 +127,11 @@ async function main() {
         voice,
         scenes: values.scenes === undefined ? undefined : Number(values.scenes),
         style: values.style,
+        scriptModel: values['script-model'],
+        imageModel: values['image-model'],
+        voiceModel: values['voice-model'],
+        voiceBank: values['voice-bank'],
+        imagePreset: localSettings.shape.imagePreset.parse(values['image-preset']),
       })
     : provider
       ? await buildPaidShort(provider, topic ?? '', directory, {

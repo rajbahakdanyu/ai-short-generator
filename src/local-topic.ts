@@ -1,6 +1,7 @@
 import {execFile} from 'node:child_process';
 import {access} from 'node:fs/promises';
-import {join, resolve} from 'node:path';
+import {homedir} from 'node:os';
+import {basename, join, resolve} from 'node:path';
 import {promisify} from 'node:util';
 import {z} from 'zod';
 import {writeJson} from './checkpoint.ts';
@@ -28,14 +29,23 @@ export async function buildLocalTopic(
   });
   const models = resolve('.local-models');
   const python = join(models, 'venv/bin/python');
-  const weights = join(models, 'script.gguf');
+  const modelPath = (path: string) => resolve(path.startsWith('~/') ? join(homedir(), path.slice(2)) : path);
+  const weights = modelPath(settings.scriptModel);
+  const imageModel = modelPath(settings.imageModel);
+  const speech = {model: modelPath(settings.voiceModel), voices: modelPath(settings.voiceBank)};
   await Promise.all(
-    [weights, python, join(models, 'sd-turbo/model_index.json')].map((path) => access(path)),
-  ).catch(() => {
-    throw new Error('Local topic generation needs model files. Run pnpm setup:local.');
-  });
-  const prompt = `<start_of_turn>user\nWrite a short educational video about ${localTopic.parse(topic)}. Give it a title and exactly ${settings.scenes} scenes. Each narration is one clear, accurate spoken sentence. Each imagePrompt describes visible subjects and setting for that sentence. Return JSON only.<end_of_turn>\n<start_of_turn>model\n`;
-  report('Writing the script with Gemma');
+    [weights, python, join(imageModel, 'model_index.json'), speech.model, speech.voices].map(async (path) => {
+      try {
+        await access(path);
+      } catch {
+        throw new Error(
+          `Missing local model or runtime: ${path}. Check your model settings or run pnpm setup:local.`,
+        );
+      }
+    }),
+  );
+  const prompt = `Write a short educational video about ${localTopic.parse(topic)}. Give it a title and exactly ${settings.scenes} scenes. Each narration is one clear, accurate spoken sentence. Each imagePrompt describes visible subjects and setting for that sentence. Return JSON only.`;
+  report(`Writing the script with ${basename(weights)}`);
   const {stdout} = await execute(
     'llama-completion',
     [
@@ -47,7 +57,8 @@ export async function buildLocalTopic(
       String(256 * settings.scenes + 128),
       '-c',
       '4096',
-      '--no-conversation',
+      '--conversation',
+      '--single-turn',
       '--no-display-prompt',
       '--json-schema',
       JSON.stringify(z.toJSONSchema(plan)),
@@ -68,13 +79,13 @@ export async function buildLocalTopic(
       image: `illustration-${i + 1}.png`,
     })),
   });
-  report('Illustrating scenes with SD-Turbo');
-  await execute(python, [resolve('scripts/local-images.py'), directory], {
+  report(`Illustrating scenes with ${basename(imageModel)}`);
+  await execute(python, [resolve('scripts/local-images.py'), directory, imageModel], {
     signal,
     killSignal: 'SIGKILL',
     timeout: 900000,
     env: {...process.env, HF_HUB_OFFLINE: '1'},
   });
   report('Generating narration and captions');
-  return buildStoryboard(await readStoryboard(path), directory, [], undefined, signal);
+  return buildStoryboard(await readStoryboard(path), directory, [], undefined, signal, speech);
 }

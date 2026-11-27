@@ -23,20 +23,20 @@ export async function readStoryboard(path: string) {
   return {...board, scenes};
 }
 
-export async function kokoroRuntime() {
+type SpeechWeights = {model: string; voices: string};
+
+export async function kokoroRuntime(weights?: SpeechWeights) {
   const root = fileURLToPath(new URL('../', import.meta.url));
   const python = join(root, '.kokoro/venv/bin/python');
+  const model = weights?.model ?? join(root, '.kokoro/kokoro-v1.0.onnx');
+  const voices = weights?.voices ?? join(root, '.kokoro/voices-v1.0.bin');
   try {
-    await Promise.all([
-      access(python),
-      access(join(root, '.kokoro/kokoro-v1.0.onnx')),
-      access(join(root, '.kokoro/voices-v1.0.bin')),
-    ]);
+    await Promise.all([access(python), access(model), access(voices)]);
   } catch {
     throw new Error('Kokoro is missing. Run pnpm setup:voice from the project directory.');
   }
 
-  return {python, root};
+  return {python, root, model, voices};
 }
 
 export async function generateNarration(
@@ -45,9 +45,10 @@ export async function generateNarration(
   assets: string,
   label = 'batch',
   signal?: AbortSignal,
+  weights?: SpeechWeights,
 ) {
   if (!scenes.length) return;
-  const {python, root} = await kokoroRuntime();
+  const {python, root, model, voices} = await kokoroRuntime(weights);
   const input = join(directory, `narration-input-${label}.json`);
   await writeFile(
     input,
@@ -57,7 +58,7 @@ export async function generateNarration(
   );
   try {
     console.log('Generating narration locally with Kokoro');
-    await run(python, [join(root, 'scripts/narrate.py'), input, assets], signal);
+    await run(python, [join(root, 'scripts/narrate.py'), input, assets, model, voices], signal);
     for (const {index} of scenes) {
       signal?.throwIfAborted();
       const speech = join(assets, `speech-${index}.wav`);
@@ -75,6 +76,7 @@ export async function buildStoryboard(
   prepared: {voice?: string; captions?: Scene['captions']; frames?: number}[] = [],
   onScene?: (index: number) => void,
   signal?: AbortSignal,
+  weights?: SpeechWeights,
 ): Promise<Project> {
   const assets = join(directory, 'assets');
   await writeFile(join(directory, 'storyboard.json'), `${JSON.stringify(board, null, 2)}\n`);
@@ -86,6 +88,7 @@ export async function buildStoryboard(
     assets,
     'batch',
     signal,
+    weights,
   );
   const scenes: Project['scenes'] = [];
   for (const [index, scene] of board.scenes.entries()) {

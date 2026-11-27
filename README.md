@@ -30,6 +30,26 @@ pnpm generate --local-topic "How do fireflies glow?"
 
 The CLI prints the output path. Use `--scenes 4 --style "Watercolour" --kokoro-voice bf_emma` to customise generation, or add `--prepare-only` to stop before rendering.
 
+### Switch models on your Mac
+
+Open **Project → Generate locally from topic → Local models**. Enter paths to models you have downloaded. Absolute paths, paths starting with `~/`, and paths relative to the repository work. Studio remembers the model selections in this browser. Clear a path and leave the field to restore its bundled default.
+
+| Stage | What to select |
+| --- | --- |
+| Script | A llama.cpp-compatible instruction model in GGUF format with an embedded chat template. Select a larger quantisation or model that fits your Mac. |
+| Illustrations | A complete local Diffusers text-to-image folder with `model_index.json`, tokenizer, configuration, and safetensors weights. Choose **SD-Turbo** for the bundled model (2 steps), **Standard Stable Diffusion** for a conventional SD model (25 steps, 512 × 768), or **Standard SDXL** for a conventional SDXL model (25 steps, 768 × 1024). |
+| Narration | A Kokoro-compatible ONNX model and matching voice bank containing your chosen voice. |
+
+The same choices are available on the CLI. For example, after downloading the corresponding files:
+
+```sh
+pnpm generate --local-topic "How prisms split light" \
+  --script-model ~/Models/writer.gguf \
+  --image-model ~/Models/sdxl-base --image-preset sdxl
+```
+
+Use `--voice-model` and `--voice-bank` for custom Kokoro weights. Each run records its model selections in `local-storyboard.json`.
+
 ## Code checks
 
 Run `pnpm check` for Biome linting, import organisation, formatting checks, and TypeScript type checking. Use `pnpm lint` to run only the linter or `pnpm format` to format files in place. Run `pnpm exec biome check --write .` to also organise imports and apply safe fixes.

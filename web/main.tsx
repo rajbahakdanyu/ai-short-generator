@@ -40,7 +40,7 @@ import {
 import {lazy, Suspense, useEffect, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {defaultKokoroVoice, kokoroVoices} from '../src/kokoro-voices.ts';
-import {localSettings} from '../src/local-settings.ts';
+import {localModelDefaults, localSettings} from '../src/local-settings.ts';
 import {captionIssue, maxCaptions, maxProjectFrames, maxSceneFrames, maxScenes} from '../src/project.ts';
 import type {PaidSelection} from '../src/providers/catalog.ts';
 import {deleteSnapshot, listSnapshots, type Snapshot, saveSnapshot, useDraft} from './draft-state.ts';
@@ -861,6 +861,43 @@ function Studio() {
           value={settings.style}
           onChange={(event) => setSettings({...settings, style: event.currentTarget.value})}
         />
+        <details>
+          <summary>Local models</summary>
+          {(
+            [
+              ['scriptModel', 'Script model (.gguf)'],
+              ['imageModel', 'Image model (Diffusers folder)'],
+              ['voiceModel', 'Kokoro model (.onnx)'],
+              ['voiceBank', 'Kokoro voice bank (.bin)'],
+            ] as const
+          ).map(([field, label]) => (
+            <TextInput
+              key={field}
+              label={label}
+              placeholder={localModelDefaults[field]}
+              value={settings[field] ?? localModelDefaults[field]}
+              onChange={(event) => setSettings({...settings, [field]: event.currentTarget.value})}
+              onBlur={() => {
+                if (!settings[field]?.trim()) setSettings({...settings, [field]: localModelDefaults[field]});
+              }}
+            />
+          ))}
+          <NativeSelect
+            label="Image generation preset"
+            data={[
+              {value: 'turbo', label: 'SD-Turbo'},
+              {value: 'standard', label: 'Standard Stable Diffusion'},
+              {value: 'sdxl', label: 'Standard SDXL'},
+            ]}
+            value={settings.imagePreset ?? 'turbo'}
+            onChange={(event) =>
+              setSettings({
+                ...settings,
+                imagePreset: event.currentTarget.value as typeof settings.imagePreset,
+              })
+            }
+          />
+        </details>
         <Button
           className="primary"
           disabled={!topic.trim() || !settings.style.trim() || running}
