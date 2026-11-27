@@ -13,6 +13,7 @@ import {
   NativeSelect,
   NumberInput,
   Progress,
+  Tabs,
   Textarea,
   TextInput,
   Tooltip,
@@ -85,6 +86,25 @@ function Studio() {
     key: 'short-studio-local-settings',
     defaultValue: localSettings.parse({}),
   });
+  const [localTab, setLocalTab] = useState<string | null>('short');
+  function openLocal(tab: 'short' | 'models') {
+    setLocalTab(tab);
+    setDialog('local');
+  }
+  function modelInput(field: keyof typeof localModelDefaults, label: string) {
+    return (
+      <TextInput
+        key={field}
+        label={label}
+        placeholder={localModelDefaults[field]}
+        value={settings[field] ?? localModelDefaults[field]}
+        onChange={(event) => setSettings({...settings, [field]: event.currentTarget.value})}
+        onBlur={() => {
+          if (!settings[field]?.trim()) setSettings({...settings, [field]: localModelDefaults[field]});
+        }}
+      />
+    );
+  }
   const [topic, setTopic] = useState('');
   const [script, setScript] = useState('');
   const {job, setJob, running, pollError} = useStudioJobs();
@@ -426,23 +446,6 @@ function Studio() {
               </Button>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Item disabled={saving || !hydrated} onClick={() => void protectDraft(refreshLibrary)}>
-                Save a copy
-              </Menu.Item>
-              <Menu.Item onClick={() => void refreshLibrary().catch((issue) => setError(String(issue)))}>
-                Saved projects
-              </Menu.Item>
-              <Menu.Item disabled={!hydrated} onClick={downloadEditableDraft}>
-                Download editable draft
-              </Menu.Item>
-              <Menu.Item onClick={() => draftPicker.current?.click()}>Open editable draft</Menu.Item>
-              <Menu.Item disabled={!canUndo} onClick={undo}>
-                Undo
-              </Menu.Item>
-              <Menu.Item disabled={!canRedo} onClick={redo}>
-                Redo
-              </Menu.Item>
-              <Menu.Divider />
               <Menu.Item leftSection={<Plus size={15} />} onClick={() => setDialog('new')}>
                 New project
               </Menu.Item>
@@ -453,8 +456,41 @@ function Studio() {
               >
                 Open project folder
               </Menu.Item>
-              <Menu.Item disabled={running || !!voiceScene} onClick={() => setDialog('local')}>
-                Generate locally from topic
+              <Menu.Item leftSection={<ClipboardPaste size={15} />} onClick={() => setDialog('script')}>
+                Paste script
+              </Menu.Item>
+              <Menu.Item leftSection={<RotateCcw size={15} />} onClick={() => setDialog('sample')}>
+                Load sample project
+              </Menu.Item>
+              <Menu.Divider />
+              <Menu.Item disabled={saving || !hydrated} onClick={() => void protectDraft(refreshLibrary)}>
+                Save a copy
+              </Menu.Item>
+              <Menu.Item onClick={() => void refreshLibrary().catch((issue) => setError(String(issue)))}>
+                Saved projects
+              </Menu.Item>
+              <Menu.Item disabled={!hydrated} onClick={downloadEditableDraft}>
+                Download editable draft
+              </Menu.Item>
+              <Menu.Item onClick={() => draftPicker.current?.click()}>Open editable draft</Menu.Item>
+              <Menu.Divider />
+              <Menu.Item disabled={!canUndo} onClick={undo}>
+                Undo
+              </Menu.Item>
+              <Menu.Item disabled={!canRedo} onClick={redo}>
+                Redo
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+          <Menu position="bottom-end">
+            <Menu.Target>
+              <Button className="project-menu" variant="default" rightSection={<ChevronDown size={14} />}>
+                Generate
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item disabled={running || !!voiceScene} onClick={() => openLocal('short')}>
+                Local generation
               </Menu.Item>
               <Menu.Item
                 disabled={running || !!voiceScene}
@@ -464,16 +500,12 @@ function Studio() {
                   setDialog('paid');
                 }}
               >
-                Generate from topic (paid)
+                Paid generation
               </Menu.Item>
+              <Menu.Divider />
+              <Menu.Item onClick={() => openLocal('models')}>Local model settings</Menu.Item>
               <Menu.Item onClick={() => void refreshOutputs().catch((issue) => setError(String(issue)))}>
                 Generation history{' '}
-              </Menu.Item>
-              <Menu.Item leftSection={<ClipboardPaste size={15} />} onClick={() => setDialog('script')}>
-                Paste script
-              </Menu.Item>
-              <Menu.Item leftSection={<RotateCcw size={15} />} onClick={() => setDialog('sample')}>
-                Load sample project
               </Menu.Item>
             </Menu.Dropdown>
           </Menu>
@@ -831,80 +863,88 @@ function Studio() {
       <Modal
         opened={dialog === 'local'}
         onClose={() => setDialog(undefined)}
-        title="Generate locally from topic"
+        title="Local generation"
+        size="lg"
         centered
       >
-        <Textarea
-          label="Topic"
-          value={topic}
-          maxLength={500}
-          placeholder="How do fireflies glow?"
-          onChange={(event) => setTopic(event.currentTarget.value)}
-        />
-        <NativeSelect
-          label="Scenes"
-          data={['1', '2', '3', '4', '5', '6']}
-          value={settings.scenes}
-          onChange={(event) => setSettings({...settings, scenes: Number(event.currentTarget.value)})}
-        />
-        <NativeSelect
-          label="Narrator"
-          data={Object.entries(kokoroVoices).map(([value, label]) => ({value, label}))}
-          value={settings.voice}
-          onChange={(event) =>
-            setSettings({...settings, voice: event.currentTarget.value as typeof settings.voice})
-          }
-        />
-        <TextInput
-          label="Illustration style"
-          maxLength={150}
-          value={settings.style}
-          onChange={(event) => setSettings({...settings, style: event.currentTarget.value})}
-        />
-        <details>
-          <summary>Local models</summary>
-          {(
-            [
-              ['scriptModel', 'Script model (.gguf)'],
-              ['imageModel', 'Image model (Diffusers folder)'],
-              ['voiceModel', 'Kokoro model (.onnx)'],
-              ['voiceBank', 'Kokoro voice bank (.bin)'],
-            ] as const
-          ).map(([field, label]) => (
-            <TextInput
-              key={field}
-              label={label}
-              placeholder={localModelDefaults[field]}
-              value={settings[field] ?? localModelDefaults[field]}
-              onChange={(event) => setSettings({...settings, [field]: event.currentTarget.value})}
-              onBlur={() => {
-                if (!settings[field]?.trim()) setSettings({...settings, [field]: localModelDefaults[field]});
-              }}
-            />
-          ))}
-          <NativeSelect
-            label="Image generation preset"
-            data={[
-              {value: 'turbo', label: 'SD-Turbo'},
-              {value: 'standard', label: 'Standard Stable Diffusion'},
-              {value: 'sdxl', label: 'Standard SDXL'},
-            ]}
-            value={settings.imagePreset ?? 'turbo'}
-            onChange={(event) =>
-              setSettings({
-                ...settings,
-                imagePreset: event.currentTarget.value as typeof settings.imagePreset,
-              })
-            }
-          />
-        </details>
-        <Button
-          className="primary"
-          disabled={!topic.trim() || !settings.style.trim() || running}
-          onClick={startLocal}
-        >
-          Generate MP4
-        </Button>
+        <Tabs value={localTab} onChange={setLocalTab}>
+          <Tabs.List>
+            <Tabs.Tab value="short">Short settings</Tabs.Tab>
+            <Tabs.Tab value="models">Local models</Tabs.Tab>
+          </Tabs.List>
+          <Tabs.Panel value="short">
+            <div className="generation-fields">
+              <Textarea
+                label="Topic"
+                value={topic}
+                maxLength={500}
+                placeholder="How do fireflies glow?"
+                onChange={(event) => setTopic(event.currentTarget.value)}
+              />
+              <div className="generation-pair">
+                <NativeSelect
+                  label="Scenes"
+                  data={['1', '2', '3', '4', '5', '6']}
+                  value={settings.scenes}
+                  onChange={(event) => setSettings({...settings, scenes: Number(event.currentTarget.value)})}
+                />
+                <NativeSelect
+                  label="Narrator"
+                  data={Object.entries(kokoroVoices).map(([value, label]) => ({value, label}))}
+                  value={settings.voice}
+                  onChange={(event) =>
+                    setSettings({...settings, voice: event.currentTarget.value as typeof settings.voice})
+                  }
+                />
+              </div>
+              <TextInput
+                label="Illustration style"
+                maxLength={150}
+                value={settings.style}
+                onChange={(event) => setSettings({...settings, style: event.currentTarget.value})}
+              />
+              <Button
+                className="primary"
+                disabled={!topic.trim() || !settings.style.trim() || running || !!voiceScene}
+                onClick={startLocal}
+              >
+                Generate MP4
+              </Button>
+            </div>
+          </Tabs.Panel>
+          <Tabs.Panel value="models">
+            <div className="generation-fields">
+              <fieldset>
+                <legend>Script</legend>
+                {modelInput('scriptModel', 'Instruction model (.gguf)')}
+              </fieldset>
+              <fieldset>
+                <legend>Illustrations</legend>
+                {modelInput('imageModel', 'Diffusers model folder')}
+                <NativeSelect
+                  label="Image generation preset"
+                  data={[
+                    {value: 'turbo', label: 'SD-Turbo'},
+                    {value: 'standard', label: 'Standard Stable Diffusion'},
+                    {value: 'sdxl', label: 'Standard SDXL'},
+                  ]}
+                  value={settings.imagePreset ?? 'turbo'}
+                  onChange={(event) =>
+                    setSettings({
+                      ...settings,
+                      imagePreset: event.currentTarget.value as typeof settings.imagePreset,
+                    })
+                  }
+                />
+              </fieldset>
+              <fieldset>
+                <legend>Narration</legend>
+                {modelInput('voiceModel', 'Kokoro model (.onnx)')}
+                {modelInput('voiceBank', 'Voice bank (.bin)')}
+              </fieldset>
+            </div>
+          </Tabs.Panel>
+        </Tabs>
       </Modal>
       <Modal
         opened={dialog === 'script'}

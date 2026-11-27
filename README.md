@@ -20,7 +20,7 @@ pnpm studio
 
 The complete setup targets Apple Silicon Macs. It uses Homebrew for llama.cpp and downloads Gemma 3 1B, SD-Turbo, Kokoro, Python packages, and the rendering browser. Allow several gigabytes of disk space and internet access during setup.
 
-Open [Short Studio](http://127.0.0.1:5173/) and choose **Project → Generate locally from topic**. Enter a topic, choose 1–6 scenes and a narrator, describe the illustration style, then click **Generate MP4**. Studio remembers these settings in this browser. Gemma writes the narrated scenes, SD-Turbo illustrates each scene, Kokoro voices the script, and Remotion renders a captioned portrait MP4. Generation uses the installed models and needs no API key or internet connection. The separate paid option remains available.
+Open [Short Studio](http://127.0.0.1:5173/) and choose **Generate → Local generation**. Enter a topic, choose 1–6 scenes and a narrator, describe the illustration style, then click **Generate MP4**. Studio remembers these settings in this browser. Gemma writes the narrated scenes, SD-Turbo illustrates each scene, Kokoro voices the script, and Remotion renders a captioned portrait MP4. Generation uses the installed models and needs no API key or internet connection. The separate paid option remains available.
 
 The same local workflow runs from the terminal:
 
@@ -32,13 +32,13 @@ The CLI prints the output path. Use `--scenes 4 --style "Watercolour" --kokoro-v
 
 ### Switch models on your Mac
 
-Open **Project → Generate locally from topic → Local models**. Enter paths to models you have downloaded. Absolute paths, paths starting with `~/`, and paths relative to the repository work. Studio remembers the model selections in this browser. Clear a path and leave the field to restore its bundled default.
+Open **Generate → Local model settings**. Enter paths to models you have downloaded. Absolute paths, paths starting with `~/`, and paths relative to the repository work. Studio remembers the model selections in this browser. Clear a path and leave the field to restore its bundled default.
 
-| Stage | What to select |
-| --- | --- |
-| Script | A llama.cpp-compatible instruction model in GGUF format with an embedded chat template. Select a larger quantisation or model that fits your Mac. |
+| Stage         | What to select                                                                                                                                                                                                                                                                                                                               |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Script        | A llama.cpp-compatible instruction model in GGUF format with an embedded chat template. Select a larger quantisation or model that fits your Mac.                                                                                                                                                                                            |
 | Illustrations | A complete local Diffusers text-to-image folder with `model_index.json`, tokenizer, configuration, and safetensors weights. Choose **SD-Turbo** for the bundled model (2 steps), **Standard Stable Diffusion** for a conventional SD model (25 steps, 512 × 768), or **Standard SDXL** for a conventional SDXL model (25 steps, 768 × 1024). |
-| Narration | A Kokoro-compatible ONNX model and matching voice bank containing your chosen voice. |
+| Narration     | A Kokoro-compatible ONNX model and matching voice bank containing your chosen voice.                                                                                                                                                                                                                                                         |
 
 The same choices are available on the CLI. For example, after downloading the corresponding files:
 
@@ -75,11 +75,11 @@ Open [Short Studio](http://127.0.0.1:5173/). The bundled black-hole project open
 
 Use **Project → Save a copy** to keep a named copy in the browser. Studio also saves a recovery copy before replacing the active draft. Open those copies from **Saved projects**, or use **Download editable draft** and **Open editable draft** to move a project with its media between browsers. Undo and redo are available from the Project menu.
 
-For paid generation, start with **Project → Generate from topic → Storyboard only**. Open the storyboard from the result dialog, review the claims, and add references in **Sources and verification notes**. Return to the generation dialog to prepare the current storyboard or generate its MP4. Choose still illustrations or cinematic portrait clips through [fal WAN 2.7](https://fal.ai/models/fal-ai/wan/v2.7/text-to-video/api). Video generation uses the entered fal key or `FAL_KEY`. The dialog shows the number of generation requests and can enforce a spending estimate based on rates you enter. Studio records attempted generation requests and checks the estimated limit again on retries. You can raise the total estimate limit before resuming. Actual billing comes from the provider.
+For paid generation, start with **Generate → Paid generation → Storyboard only**. Open the storyboard from the result dialog, review the claims, and add references in **Sources and verification notes**. Return to the generation dialog to prepare the current storyboard or generate its MP4. Choose still illustrations or cinematic portrait clips through [fal WAN 2.7](https://fal.ai/models/fal-ai/wan/v2.7/text-to-video/api). Video generation uses the entered fal key or `FAL_KEY`. The dialog shows the number of generation requests and can enforce a spending estimate based on rates you enter. Studio records attempted generation requests and checks the estimated limit again on retries. You can raise the total estimate limit before resuming. Actual billing comes from the provider.
 
 Custom API endpoints require an explicit key when entered in Studio and must use HTTPS outside loopback. Asset downloads from providers require public HTTPS. Keys entered in Studio are kept in tab memory and excluded from job and project files. Leave fields blank to use `.env` settings or provider defaults.
 
-**Project → Generation history** shows job status and disk size and lets you reopen or explicitly delete output. Failed or stopped paid jobs can resume from their saved storyboard and reuse completed assets. Failed local exports can retry rendering once the prepared project exists. Re-enter any tab-only provider settings after a reload. Stopping a job halts local processing and new requests. Work already accepted by the provider may finish and incur charges.
+**Generate → Generation history** shows job status and disk size and lets you reopen or explicitly delete output. Failed or stopped paid jobs can resume from their saved storyboard and reuse completed assets. Failed local exports can retry rendering once the prepared project exists. Re-enter any tab-only provider settings after a reload. Stopping a job halts local processing and new requests. Work already accepted by the provider may finish and incur charges.
 
 Studio listens on loopback. The editor and local MP4 export make no paid API calls. Studio accepts up to 256 MB per upload and 64 MB per file. Visuals support up to 4096 pixels per side. Prepared projects support up to 100 scenes, two minutes per scene, and ten minutes total.
 

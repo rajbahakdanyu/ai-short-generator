@@ -887,3 +887,46 @@ main {
 .provider-advanced .provider-row {
   margin-bottom: 8px;
 }
+
+.generation-fields,
+.generation-fields fieldset {
+  display: grid;
+  gap: 14px;
+}
+.generation-fields {
+  padding-top: 20px;
+}
+.generation-fields fieldset {
+  margin: 0;
+  min-width: 0;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: 8px;
+  padding: 10px 16px 16px;
+}
+.generation-fields legend {
+  padding-inline: 5px;
+  font-weight: 650;
+}
+.generation-fields > button {
+  justify-self: end;
+}
+.generation-pair {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(0, 2fr);
+  gap: 12px;
+}
+@media (max-width: 520px) {
+  .topbar {
+    height: auto;
+    min-height: 57px;
+    flex-wrap: wrap;
+    padding-block: 8px;
+    gap: 6px;
+  }
+  .top-actions {
+    margin-left: auto;
+  }
+  .generation-pair {
+    grid-template-columns: 1fr;
+  }
+}
